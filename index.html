@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Singapore Elderly Population Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .map-container {
+            margin: 20px;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 8px;
+            background: white;
+            border: 1px solid #ddd;
+            pointer-events: none;
+            font-family: Arial;
+        }
+        #timeline {
+            margin-top: 20px;
+        }
+        .legend {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <select id="yearSelector"></select>
+        <div class="map-container"></div>
+        <div id="timeline"></div>
+    </div>
+
+<script>
+// 初始化配置
+const width = 800;
+const height = 600;
+const years = [2003, 2008, 2013, 2018];
+
+// 创建SVG容器
+const svg = d3.select(".map-container")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+const tooltip = d3.select("body").append("div")
+    .attr("class", "tooltip")
+    .style("opacity", 0);
+
+// 加载数据
+Promise.all([
+    d3.json("sgmap.json"),
+    d3.csv("elderly.csv"),
+    d3.csv("KeyIndicatorsOnTheElderlyAnnual.csv")
+]).then(([geoData, elderlyData, indicators]) => {
+    
+    // 数据处理
+    const elderlyByYear = d3.group(elderlyData, d => d["SHS_year"]);
+    const nationalTrend = indicators.find(d => d.DataSeries === "Proportion Of Elderly Residents (65 Years & Over) Among Resident Population");
+    
+    // 创建年份选择器
+    const selector = d3.select("#yearSelector")
+        .selectAll("option")
+        .data(years)
+        .enter()
+        .append("option")
+        .text(d => d);
+
+    // 创建颜色比例尺
+    const colorScale = d3.scaleSequential(d3.interpolateOranges)
+        .domain([0, d3.max(elderlyData, d => (d.Elderly/d.Total)*100)]);
+
+    // 创建投影
+    const projection = d3.geoMercator()
+        .fitSize([width, height], geoData);
+
+    const path = d3.geoPath().projection(projection);
+
+    // 初始渲染
+    updateVisualization(2003);
+
+    // 年份选择事件
+    d3.select("#yearSelector").on("change", function() {
+        updateVisualization(this.value);
+    });
+
+    // 更新可视化函数
+    function updateVisualization(selectedYear) {
+        // 处理地图数据
+        const yearData = elderlyByYear.get(selectedYear);
+        const dataMap = new Map(yearData.map(d => [d["Town/estate"], d]));
+        
+        // 绘制地图
+        svg.selectAll("path")
+            .data(geoData.features)
+            .join("path")
+            .attr("d", path)
+            .attr("fill", d => {
+                const match = dataMap.get(d.properties["Subzone Name"]);
+                return match ? colorScale((match.Elderly/match.Total)*100) : "#ccc";
+            })
+            .on("mouseover", (event, d) => {
+                const data = dataMap.get(d.properties["Subzone Name"]);
+                tooltip.transition().duration(200).style("opacity", .9);
+                tooltip.html(
+                    data ? 
+                    `<strong>${d.properties["Subzone Name"]}</strong><br>
+                    Elderly: ${data.Elderly}<br>
+                    Total: ${data.Total}<br>
+                    Percentage: ${((data.Elderly/data.Total)*100).toFixed(1)}%` : 
+                    "No data available"
+                )
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+            })
+            .on("mouseout", () => {
+                tooltip.transition().duration(500).style("opacity", 0);
+            });
+
+        // 绘制全国趋势图
+        drawTimeline(nationalTrend);
+    }
+
+    // 绘制全国趋势图
+    function drawTimeline(data) {
+        const margin = {top: 20, right: 30, bottom: 30, left: 40};
+        const timelineWidth = 600;
+        const timelineHeight = 200;
+
+        const timelineSvg = d3.select("#timeline")
+            .html("")
+            .append("svg")
+            .attr("width", timelineWidth)
+            .attr("height", timelineHeight);
+
+        const years = Object.keys(data)
+            .filter(k => !isNaN(k))
+            .map(d => +d)
+            .sort((a,b) => a - b);
+
+        const x = d3.scaleLinear()
+            .domain(d3.extent(years))
+            .range([margin.left, timelineWidth - margin.right]);
+
+        const y = d3.scaleLinear()
+            .domain([0, 30])
+            .range([timelineHeight - margin.bottom, margin.top]);
+
+        timelineSvg.append("path")
+            .datum(years)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 1.5)
+            .attr("d", d3.line()
+                .x(d => x(d))
+                .y(d => y(+data[d]))
+            );
+
+        timelineSvg.append("g")
+            .attr("transform", `translate(0,${timelineHeight - margin.bottom})`)
+            .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+        timelineSvg.append("g")
+            .attr("transform", `translate(${margin.left},0)`)
+            .call(d3.axisLeft(y));
+    }
+
+    // 添加图例
+    const legend = d3.select(".container")
+        .append("div")
+        .attr("class", "legend");
+
+    const legendScale = d3.scaleLinear()
+        .domain(colorScale.domain())
+        .range([0, 200]);
+
+    const legendAxis = d3.axisBottom(legendScale)
+        .tickFormat(d => d + "%");
+
+    legend.append("svg")
+        .attr("width", 220)
+        .attr("height", 60)
+        .append("g")
+        .attr("transform", "translate(10,20)")
+        .call(legendAxis);
+
+    legend.select("svg")
+        .selectAll("rect")
+        .data(d3.range(0, 100, 2))
+        .enter()
+        .append("rect")
+        .attr("x", d => legendScale(d))
+        .attr("y", 0)
+        .attr("width", 2)
+        .attr("height", 20)
+        .attr("fill", d => colorScale(d));
+});
+</script>
+</body>
+</html>
