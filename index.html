@@ -148,9 +148,9 @@ Promise.all([
         tooltip
             .html(`
                 <strong>${d['Town/estate']}</strong><br>
-                老年人: ${d.Elderly.toLocaleString()}<br>
-                总人口: ${d.Total.toLocaleString()}<br>
-                占比: ${(d.Elderly/d.Total*100).toFixed(1)}%
+                Older Adult: ${d.Elderly.toLocaleString()}<br>
+                Total: ${d.Total.toLocaleString()}<br>
+                Rate: ${(d.Elderly/d.Total*100).toFixed(1)}%
             `)
             .style("left", event.pageX + 15 + "px")
             .style("top", event.pageY + 15 + "px")
