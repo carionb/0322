@@ -1,158 +1,182 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Singapore Elderly Population Map</title>
+    <title>Singapore Elderly Population Analysis</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        .map-container { 
-            width: 1200px;
-            height: 1000px;
-            border: 1px solid #ccc;
+        .container { 
+            display: grid;
+            grid-template-rows: auto auto;
+            gap: 20px;
+            padding: 20px;
+        }
+        #map-container { 
+            height: 700px;
+            border: 1px solid #ddd;
+        }
+        #chart-container {
+            height: 400px;
+            border: 1px solid #ddd;
         }
         .tooltip {
             position: absolute;
-            padding: 8px;
-            background: rgba(255,255,255,0.9);
-            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+            border: 1px solid #ccc;
             pointer-events: none;
             font-family: Arial;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+        }
+        .legend { 
+            font-size: 12px;
+            padding: 10px;
+        }
+        .dropdown {
+            margin: 20px;
         }
     </style>
 </head>
 <body>
-    <div id="map-container"></div>
+    <div class="container">
+        <div id="map-container"></div>
+        <div id="chart-container"></div>
+    </div>
+    <div class="dropdown">
+        <select id="indicator-select">
+            <option value="Proportion Of Elderly Residents (65 Years & Over) Among Resident Population">Proportion of Elderly Residents</option>
+            <option value="Sex Ratio Of Elderly Residents (65 Years & Over)">Sex Ratio of Elderly Residents</option>
+            <option value="Proportion Of Elderly Residents (65 Years & Over) In Labour Force">Elderly Labour Force Participation Rate</option>
+        </select>
+    </div>
 
 <script>
-// 初始化配置
-const width = 1200, height = 1000;
+// Configurations
+const mapWidth = 1000, mapHeight = 600;
+const chartWidth = 1000, chartHeight = 400;
+const margin = { top: 30, right: 30, bottom: 50, left: 60 };
 
-// 加载数据
+// Load data
 Promise.all([
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/elderly.csv", d3.autoType),
+    d3.csv("https://raw.githubusercontent.com/carionb/0322/main/KeyIndicatorsOnTheElderlyAnnual.csv", d3.autoType),
     d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
-]).then(([elderlyData, geoData]) => {
-    
-    // 调试输出
-    console.log("GeoJSON属性字段示例:", geoData.features[0].properties);
-    console.log("CSV字段示例:", elderlyData[0]);
+]).then(([elderlyData, indicatorData, geoData]) => {
 
-    // 创建投影（根据新数据优化）
+    // Map Visualization
     const projection = d3.geoMercator()
-        .center([103.8, 1.35])  // 新加坡中心坐标
-        .scale(45000)           // 调整后的最佳缩放比例
-        .translate([width/2, height/2]);
+        .center([103.8, 1.35])
+        .scale(45000)
+        .translate([mapWidth/2, mapHeight/2]);
 
     const path = d3.geoPath().projection(projection);
 
-    // 创建SVG容器
-    const svg = d3.select("#map-container")
+    const svgMap = d3.select("#map-container")
         .append("svg")
-        .attr("width", width)
-        .attr("height", height);
+        .attr("width", mapWidth)
+        .attr("height", mapHeight);
 
-    // 绘制地图边界
-    svg.selectAll("path")
+    svgMap.selectAll("path")
         .data(geoData.features)
         .enter().append("path")
         .attr("d", path)
-        .attr("fill", "#f8f8f8")
-        .attr("stroke", "#666")
-        .attr("stroke-width", 0.5);
+        .attr("fill", "#f0f0f0")
+        .attr("stroke", "#666");
 
-    // 创建名称匹配系统
     const normalizeName = (name) => 
         name.trim().toUpperCase().replace(/[^A-Z]/g, "");
 
-    // 构建区域坐标映射
     const areaMap = new Map();
     geoData.features.forEach(feature => {
-        const rawName = feature.properties.PLN_AREA_N; // 关键字段
+        const rawName = feature.properties.PLN_AREA_N;
         if (rawName) {
             const normalized = normalizeName(rawName);
-            const centroid = d3.geoCentroid(feature);
-            areaMap.set(normalized, {
-                centroid: centroid,
-                feature: feature
-            });
+            areaMap.set(normalized, d3.geoCentroid(feature));
         }
     });
 
-    // 调试输出匹配结果
-    console.log("GeoJSON区域列表:", Array.from(areaMap.keys()));
-    console.log("CSV区域列表:", 
-        [...new Set(elderlyData.map(d => normalizeName(d['Town/estate'])))]);
-
-    // 创建颜色比例尺
-    const maxRatio = d3.max(elderlyData, d => d.Elderly/d.Total);
-    const colorScale = d3.scaleSequential(d3.interpolateReds)
-        .domain([0, maxRatio]);
-
-    // 添加数据点（使用2018年数据）
-    svg.selectAll("circle")
+    svgMap.selectAll("circle")
         .data(elderlyData.filter(d => d.SHS_year === 2018))
         .enter().append("circle")
         .attr("cx", d => {
             const key = normalizeName(d['Town/estate']);
-            const info = areaMap.get(key);
-            return info ? projection(info.centroid)[0] : -1000;
+            return projection(areaMap.get(key))[0] || -1000;
         })
         .attr("cy", d => {
             const key = normalizeName(d['Town/estate']);
-            const info = areaMap.get(key);
-            return info ? projection(info.centroid)[1] : -1000;
+            return projection(areaMap.get(key))[1] || -1000;
         })
-        .attr("r", d => Math.sqrt(d.Total)/50) // 半径按总人口缩放
-        .attr("fill", d => colorScale(d.Elderly/d.Total))
-        .attr("stroke", "#333")
-        .attr("stroke-width", 0.5)
+        .attr("r", d => Math.sqrt(d.Total)/50)
+        .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total))
         .attr("opacity", 0.8)
-        .on("mouseover", function(event, d) {
-            d3.select(this).attr("r", Math.sqrt(d.Total)/40);
-            showTooltip(event, d);
-        })
-        .on("mouseout", function(event, d) {
-            d3.select(this).attr("r", Math.sqrt(d.Total)/50);
-            hideTooltip();
+        .on("mouseover", showMapTooltip)
+        .on("mouseout", hideTooltip);
+
+    // Line Chart
+    const svgChart = d3.select("#chart-container")
+        .append("svg")
+        .attr("width", chartWidth)
+        .attr("height", chartHeight);
+
+    const xScale = d3.scaleLinear()
+        .domain(d3.extent(indicatorData, d => +d.DataSeries))
+        .range([margin.left, chartWidth - margin.right]);
+
+    const yScale = d3.scaleLinear()
+        .range([chartHeight - margin.bottom, margin.top]);
+
+    const line = d3.line()
+        .x(d => xScale(d.year))
+        .y(d => yScale(d.value));
+
+    function updateChart(selectedIndicator) {
+        const dataset = indicatorData.map(d => ({
+            year: +d.DataSeries,
+            value: +d[selectedIndicator]
+        })).filter(d => !isNaN(d.value));
+
+        yScale.domain([0, d3.max(dataset, d => d.value)]);
+
+        svgChart.selectAll(".line")
+            .data([dataset])
+            .join("path")
+            .attr("class", "line")
+            .attr("d", line)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 2);
+
+        svgChart.selectAll(".x-axis").remove();
+        svgChart.selectAll(".y-axis").remove();
+
+        svgChart.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${chartHeight - margin.bottom})`)
+            .call(d3.axisBottom(xScale).ticks(10).tickFormat(d3.format("d")));
+
+        svgChart.append("g")
+            .attr("class", "y-axis")
+            .attr("transform", `translate(${margin.left},0)`)
+            .call(d3.axisLeft(yScale));
+    }
+
+    updateChart(document.getElementById("indicator-select").value);
+
+    d3.select("#indicator-select")
+        .on("change", function() {
+            updateChart(this.value);
         });
 
-    // 添加图例
-    const legend = svg.append("g")
-        .attr("transform", "translate(50,50)");
-
-    const legendScale = d3.scaleLinear()
-        .domain([0, maxRatio])
-        .range([0, 200]);
-
-    legend.selectAll("rect")
-        .data(d3.range(0, 1, 0.1))
-        .enter().append("rect")
-        .attr("x", d => legendScale(d))
-        .attr("y", 0)
-        .attr("width", 20)
-        .attr("height", 15)
-        .attr("fill", d => d3.interpolateReds(d));
-
-    legend.append("text")
-        .attr("x", 0)
-        .attr("y", -5)
-        .text("老年人口比例");
-
-    // 工具提示
     const tooltip = d3.select("body").append("div").attr("class", "tooltip");
 
-    function showTooltip(event, d) {
+    function showMapTooltip(event, d) {
         tooltip
             .html(`
-                <div style="color:#333">
-                    <h4>${d['Town/estate']}</h4>
-                    <p>🏙️ 总人口: ${d.Total.toLocaleString()}</p>
-                    <p>👵 老年人口: ${d.Elderly.toLocaleString()}</p>
-                    <p>📈 老年比例: ${(d.Elderly/d.Total*100).toFixed(1)}%</p>
-                </div>
+                <strong>${d['Town/estate']} (${d.SHS_year})</strong>
+                <div>Total Population: ${d.Total.toLocaleString()}</div>
+                <div>Elderly Population: ${d.Elderly.toLocaleString()}</div>
+                <div>Proportion: ${(d.Elderly/d.Total*100).toFixed(1)}%</div>
             `)
-            .style("left", event.pageX + 20 + "px")
-            .style("top", event.pageY + 20 + "px")
+            .style("left", event.pageX + 15 + "px")
+            .style("top", event.pageY + 15 + "px")
             .style("opacity", 1);
     }
 
@@ -161,8 +185,8 @@ Promise.all([
     }
 
 }).catch(error => {
-    console.error("错误详情:", error);
-    alert("数据加载失败，请查看控制台");
+    console.error("Data loading error:", error);
+    alert("Failed to load data. Check console for details.");
 });
 </script>
 </body>
