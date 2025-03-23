@@ -30,7 +30,7 @@ const width = 1200, height = 1000;
 // 加载数据
 Promise.all([
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/elderly.csv", d3.autoType),
-    d3.json("https://raw.githubusercontent.com/carionb/0322/main/sgmap.json")
+    d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
 ]).then(([elderlyData, geoData]) => {
     
     // 调试输出
