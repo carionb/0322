@@ -65,13 +65,13 @@ const margin = { top: 30, right: 30, bottom: 50, left: 60 };
 Promise.all([
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/elderly.csv", d3.autoType),
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/KeyIndicatorsOnTheElderlyAnnual.csv", d3.autoType),
-    d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson.json")
+    d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
 ]).then(([elderlyData, indicatorData, geoData]) => {
 
     const projection = d3.geoMercator()
         .center([103.8, 1.35])
         .scale(45000)
-        .translate([mapWidth/2, mapHeight/2]);
+        .translate([mapWidth / 2, mapHeight / 2]);
 
     const path = d3.geoPath().projection(projection);
 
@@ -89,14 +89,9 @@ Promise.all([
 
     const normalizeName = (name) => name.trim().toUpperCase().replace(/[^A-Z]/g, "");
 
-    function extractPLNAreaName(html) {
-        const match = html.match(/PLN_AREA_N<\/th>\s*<td>(.*?)<\/td>/);
-        return match ? match[1] : null;
-    }
-
     const areaMap = new Map();
     geoData.features.forEach(feature => {
-        const rawName = extractPLNAreaName(feature.properties.Description || "");
+        const rawName = feature.properties.PLN_AREA_N;
         if (rawName) {
             const normalized = normalizeName(rawName);
             areaMap.set(normalized, d3.geoCentroid(feature));
@@ -113,28 +108,30 @@ Promise.all([
             enter => enter.append("circle")
                 .attr("cx", d => {
                     const key = normalizeName(d['Town/estate']);
-                    return projection(areaMap.get(key))[0] || -1000;
+                    const coords = areaMap.get(key);
+                    return coords ? projection(coords)[0] : -1000;
                 })
                 .attr("cy", d => {
                     const key = normalizeName(d['Town/estate']);
-                    return projection(areaMap.get(key))[1] || -1000;
+                    const coords = areaMap.get(key);
+                    return coords ? projection(coords)[1] : -1000;
                 })
-                .attr("r", d => Math.sqrt(d.Total)/50)
-                .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total))
+                .attr("r", d => Math.sqrt(d.Total) / 50)
+                .attr("fill", d => d3.interpolateReds(d.Elderly / d.Total))
                 .attr("opacity", 0.8)
                 .on("mouseover", showMapTooltip)
                 .on("mouseout", hideTooltip),
             update => update
                 .transition().duration(500)
-                .attr("r", d => Math.sqrt(d.Total)/50)
-                .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total)),
+                .attr("r", d => Math.sqrt(d.Total) / 50)
+                .attr("fill", d => d3.interpolateReds(d.Elderly / d.Total)),
             exit => exit.remove()
         );
     }
 
     drawCircles(document.getElementById("year-select").value);
 
-    document.getElementById("year-select").addEventListener("change", function() {
+    document.getElementById("year-select").addEventListener("change", function () {
         drawCircles(this.value);
     });
 
@@ -188,7 +185,7 @@ Promise.all([
     updateChart(document.getElementById("indicator-select").value);
 
     d3.select("#indicator-select")
-        .on("change", function() {
+        .on("change", function () {
             updateChart(this.value);
         });
 
@@ -200,7 +197,7 @@ Promise.all([
                 <strong>${d['Town/estate']} (${d.SHS_year})</strong>
                 <div>Total Population: ${d.Total.toLocaleString()}</div>
                 <div>Elderly Population: ${d.Elderly.toLocaleString()}</div>
-                <div>Proportion: ${(d.Elderly/d.Total*100).toFixed(1)}%</div>
+                <div>Proportion: ${(d.Elderly / d.Total * 100).toFixed(1)}%</div>
             `)
             .style("left", event.pageX + 15 + "px")
             .style("top", event.pageY + 15 + "px")
