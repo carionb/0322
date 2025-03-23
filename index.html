@@ -48,24 +48,45 @@
 
 <script>
 const svg = d3.select("#map");
-const g = svg.append("g"); // group for zoom
+const g = svg.append("g"); // for zoom group
 const projection = d3.geoMercator().center([103.8, 1.35]).scale(45000).translate([500, 300]);
 const path = d3.geoPath().projection(projection);
 const tooltip = d3.select("#tooltip");
 
 function normalizeName(name) {
-  return name.trim().toUpperCase().replace(/[^A-Z]/g, '');
+  return name.trim().toUpperCase()
+    .replace(/(&nbsp;|\(|\)|')/g, '')
+    .replace(/\s+/g, ' ');
 }
+
 function extractPLNAreaName(desc) {
-  const match = desc?.match(/<th>PLN_AREA_N<\/th>\\s*<td>([^<]+)<\\/td>/i);
-  return match ? match[1].trim() : null;
+  if (!desc) return null;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(desc, "text/html");
+  const ths = doc.querySelectorAll('th');
+  for (const th of ths) {
+    if (th.textContent === 'PLN_AREA_N') {
+      const td = th.nextElementSibling;
+      return td?.textContent?.trim() || null;
+    }
+  }
+  return null;
 }
+
+const zoom = d3.zoom()
+  .scaleExtent([1, 8])
+  .on("zoom", (event) => g.attr("transform", event.transform));
+svg.call(zoom);
 
 Promise.all([
   d3.csv("https://raw.githubusercontent.com/carionb/0322/main/elderly.csv", d3.autoType),
   d3.csv("https://raw.githubusercontent.com/carionb/0322/main/PriceRangeofHDBFlatsOffered.csv", d3.autoType),
   d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
-]).then(([elderlyData, priceData, geoData]) => {
+])
+.then(([elderlyData, priceData, geoData]) => {
+  console.log("Elderly 数据:", elderlyData.length);
+  console.log("Price 数据:", priceData.length);
+  console.log("GeoJSON 区域:", geoData.features.length);
 
   priceData.forEach(d => {
     d.avg_price = (+d.min_selling_price + +d.max_selling_price) / 2;
@@ -83,13 +104,6 @@ Promise.all([
     }
   });
 
-  const zoom = d3.zoom()
-    .scaleExtent([1, 8])
-    .on("zoom", (event) => {
-      g.attr("transform", event.transform);
-    });
-  svg.call(zoom);
-
   function drawMap(year, roomType, showPrice) {
     g.selectAll("*").remove();
 
@@ -98,6 +112,9 @@ Promise.all([
         .filter(d => d.SHS_year === +year)
         .map(d => [normalizeName(d["Town/estate"]), d])
     );
+
+    console.log("匹配老年人口区域数:", elderlyMap.size);
+    console.log("匹配地图区域数:", areaMap.size);
 
     g.selectAll("path")
       .data(geoData.features)
@@ -111,14 +128,15 @@ Promise.all([
       });
 
     if (showPrice) {
-      const priceFiltered = priceData.filter(d =>
-        d.financial_year === +year && d.room_type.toLowerCase() === roomType.toLowerCase()
+      const filteredPrice = priceData.filter(d =>
+        d.financial_year === +year &&
+        d.room_type.toLowerCase() === roomType.toLowerCase()
       );
-      const maxPrice = d3.max(priceFiltered, d => d.avg_price);
+      const maxPrice = d3.max(filteredPrice, d => d.avg_price);
       const rScale = d3.scaleSqrt().domain([0, maxPrice]).range([0, 20]);
 
       g.selectAll("circle")
-        .data(priceFiltered)
+        .data(filteredPrice)
         .join("circle")
         .attr("cx", d => {
           const loc = areaMap.get(d.norm_town);
@@ -132,7 +150,9 @@ Promise.all([
         .attr("fill", d => d3.interpolateBlues(d.avg_price / maxPrice))
         .attr("opacity", 0.8)
         .on("mouseover", (event, d) => {
-          const ed = elderlyMap.get(d.norm_town);
+          const ed = elderlyData.find(x =>
+            normalizeName(x["Town/estate"]) === d.norm_town && x.SHS_year === +year
+          );
           tooltip
             .html(`<strong>${d["Town/estate"]}</strong><br>
                    ${roomType} Avg Price: $${Math.round(d.avg_price)}<br>
@@ -158,7 +178,8 @@ Promise.all([
   document.getElementById("toggle-price").addEventListener("change", update);
 
   update();
-});
+})
+.catch(error => console.error("数据加载失败:", error));
 </script>
 
 </body>
