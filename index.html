@@ -347,7 +347,7 @@
                         .domain(priceExtent);
 
                     // Draw price circles
-                    // Draw price circles
+                   // Draw price circles
 svg.selectAll(".price-circle")
     .data(filteredData)
     .join("circle")
@@ -361,16 +361,16 @@ svg.selectAll(".price-circle")
         return loc ? projection(loc.centroid)[1] : null;
     })
     .attr("r", 0)
-    .attr("fill", d => priceColor(d.avg_price))
-    .attr("fill-opacity", 0.4) // ✅ 半透明填充
-    .attr("stroke", d => priceColor(d.avg_price))
-    .attr("stroke-width", 2.5)
     .transition()
     .duration(600)
-    .attr("r", d => radiusScale(d.avg_price));
+    .attr("r", d => radiusScale(d.avg_price))
+    .attr("fill", d => priceColor(d.avg_price))
+    .attr("fill-opacity", 0.6)   // ✅ 淡淡的填色
+    .attr("stroke", "#333")      // ✅ 增强边缘对比
+    .attr("stroke-width", 1.2);
 
-// Draw price labels (only on hover)
-const labels = svg.selectAll(".price-label")
+// Draw always-visible price labels (with stroke)
+svg.selectAll(".price-label")
     .data(filteredData)
     .join("text")
     .attr("class", "price-label")
@@ -382,13 +382,13 @@ const labels = svg.selectAll(".price-label")
         const loc = areaMap.get(d.norm_town);
         return loc ? projection(loc.centroid)[1] + 4 : null;
     })
-    .text("")
+    .text(d => `$${Math.round(d.avg_price / 1000)}k`)
     .attr("font-size", "10px")
     .attr("text-anchor", "middle")
     .attr("fill", "#222")
-    .attr("stroke", "#fff")             // ✅ 加白色描边
-    .attr("stroke-width", 2)           // ✅ 描边宽度
-    .attr("paint-order", "stroke")     // ✅ 文字描边优先
+    .attr("stroke", "#fff")             // ✅ 白描边让文字更清晰
+    .attr("stroke-width", 2)
+    .attr("paint-order", "stroke")      // ✅ 确保描边在下层
     .attr("pointer-events", "none");
 
 // Add tooltip + label reveal on hover
