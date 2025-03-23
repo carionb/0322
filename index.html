@@ -183,6 +183,8 @@
     <p><strong>Background:</strong><br>
     As Singapore’s population continues to age, certain HDB towns have seen rising elderly populations. This study explores whether towns with a higher proportion of elderly residents tend to have more affordable HDB flats.
     </p>
+    
+    <p style="margin-bottom: 1.5rem;"></p>
 
     <p><strong>Questions:</strong>
     <ol>
@@ -191,6 +193,8 @@
         <li>Is the spatial distribution of price influenced more by demographics or geography?</li>
     </ol>
     </p>
+
+    <p style="margin-bottom: 1.5rem;"></p>
 
     <p><strong>Findings (2018 data):</strong>
     <ul>
@@ -201,6 +205,8 @@
         <li>Correlation analysis (2013–2018): ~<strong>+31%</strong> correlation between elderly ratio and price, suggesting aging towns are not always cheaper.</li>
     </ul>
     </p>
+
+    <p style="margin-bottom: 1.5rem;"></p>
 
     <p><strong>Conclusion:</strong><br>
     The map helps visualize how aging and affordability interact spatially in Singapore. Surprisingly, mature towns can remain expensive despite having higher elderly populations, challenging the assumption that aging = affordability.</p>
@@ -225,7 +231,7 @@
             .attr("height", svgHeight);
 
         const projection = d3.geoMercator()
-            .center([103.82, 1.37])
+            .center([103.82, 1.34])
             .scale(svgWidth * 100)
             .translate([svgWidth/2, svgHeight/2]);
 
