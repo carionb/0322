@@ -168,7 +168,7 @@
         </div>
 
         <div class="analysis-section">
-            <h3>Analytical Insights</h3>
+            <h3>Example Q&A</h3>
             
             <div class="qa-item">
                 <h4>Q: Where are the most affordable areas for elderly housing?</h4>
@@ -194,7 +194,7 @@
         <div class="analysis-section">
             <h3>Data Sources</h3>
             <ul>
-                <li>HDB Resale Price Index: <a href="https://data.gov.sg/dataset/resale-flat-prices" target="_blank">data.gov.sg</a></li>
+                <li>HDB Resale Price: <a href="https://data.gov.sg/dataset/resale-flat-prices" target="_blank">data.gov.sg</a></li>
                 <li>Population Trends: <a href="https://www.singstat.gov.sg/" target="_blank">Singapore Department of Statistics</a></li>
                 <li>Planning Boundaries: <a href="https://www.ura.gov.sg/" target="_blank">Urban Redevelopment Authority</a></li>
             </ul>
@@ -202,8 +202,8 @@
     </div>
 
     <script>
-        const svgWidth = Math.min(window.innerWidth - 40, 1200);
-        const svgHeight = Math.min(svgWidth * 0.6, 600);
+        const svgWidth = Math.min(window.innerWidth - 20, 1400);  // 增加最大宽度
+        const svgHeight = Math.min(svgWidth * 0.7, 800);         // 调高宽高比
         
         const svg = d3.select("#map")
             .attr("width", svgWidth)
@@ -211,7 +211,7 @@
 
         const projection = d3.geoMercator()
             .center([103.8, 1.35])
-            .scale(svgWidth * 55)
+            .scale(svgWidth * 70)
             .translate([svgWidth/2, svgHeight/2]);
 
         const path = d3.geoPath().projection(projection);
