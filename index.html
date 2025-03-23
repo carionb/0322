@@ -347,6 +347,7 @@
                         .domain(priceExtent);
 
                     // Draw price circles
+                    // Draw price circles
 svg.selectAll(".price-circle")
     .data(filteredData)
     .join("circle")
@@ -360,14 +361,16 @@ svg.selectAll(".price-circle")
         return loc ? projection(loc.centroid)[1] : null;
     })
     .attr("r", 0)
-    .transition().duration(600)
-    .attr("r", d => radiusScale(d.avg_price))
-    .attr("fill", "none")
+    .attr("fill", d => priceColor(d.avg_price))
+    .attr("fill-opacity", 0.4) // ✅ 半透明填充
     .attr("stroke", d => priceColor(d.avg_price))
-    .attr("stroke-width", 2);
+    .attr("stroke-width", 2.5)
+    .transition()
+    .duration(600)
+    .attr("r", d => radiusScale(d.avg_price));
 
-// Add price labels (text) on top of circles
-svg.selectAll(".price-label")
+// Draw price labels (only on hover)
+const labels = svg.selectAll(".price-label")
     .data(filteredData)
     .join("text")
     .attr("class", "price-label")
@@ -377,15 +380,18 @@ svg.selectAll(".price-label")
     })
     .attr("y", d => {
         const loc = areaMap.get(d.norm_town);
-        return loc ? projection(loc.centroid)[1] + 4 : null; // slight offset
+        return loc ? projection(loc.centroid)[1] + 4 : null;
     })
-    .text(d => `$${Math.round(d.avg_price / 1000)}k`)
+    .text("")
     .attr("font-size", "10px")
     .attr("text-anchor", "middle")
-    .attr("fill", "#34495e")
+    .attr("fill", "#222")
+    .attr("stroke", "#fff")             // ✅ 加白色描边
+    .attr("stroke-width", 2)           // ✅ 描边宽度
+    .attr("paint-order", "stroke")     // ✅ 文字描边优先
     .attr("pointer-events", "none");
 
-// Keep tooltip interaction
+// Add tooltip + label reveal on hover
 svg.selectAll(".price-circle")
     .on("mouseover", (event, d) => {
         const data = elderlyData.find(e => 
@@ -401,8 +407,18 @@ svg.selectAll(".price-circle")
         .style("opacity", 1)
         .style("left", `${event.pageX + 15}px`)
         .style("top", `${event.pageY - 20}px`);
+
+        // ✅ Show label on hover
+        labels
+            .filter(l => l.norm_town === d.norm_town)
+            .text(`$${Math.round(d.avg_price / 1000)}k`);
     })
-    .on("mouseout", () => tooltip.style("opacity", 0));
+    .on("mouseout", () => {
+        tooltip.style("opacity", 0);
+        labels.text(""); // ✅ Remove label
+    });
+
+
 
                 }
             }
