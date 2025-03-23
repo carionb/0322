@@ -124,6 +124,9 @@
 </head>
 <body>
     <div class="dashboard">
+        <h1 style="text-align: center; font-size: 2.5rem; margin-bottom: 2rem;">
+  Singapore HDB Housing Price & Elderly Population Analysis
+</h1>
         <div class="controls">
             <div class="control-group">
                 <label>Year</label>
@@ -175,37 +178,44 @@
         </div>
 
         <div class="analysis-section">
-            <h3>Example Q&A</h3>
-            
-            <div class="qa-item">
-                <h4>Q: Where are the most affordable areas for elderly housing?</h4>
-                <p>Based on 2018 data analysis:</p>
-                <ul>
-                    <li>Jurong West: 28% elderly population, 4-room avg $320k</li>
-                    <li>Woodlands: 31% elderly, 3-room avg $285k</li>
-                    <li>Choa Chu Kang: 26% elderly, 5-room avg $340k</li>
-                </ul>
-            </div>
+    <h3>Project Writeup</h3>
+    <p><strong>Title:</strong><br>
+    Are Aging Estates in Singapore More Affordable? A Spatial Analysis of HDB Prices and Elderly Population (2013–2018)</p>
 
-            <div class="qa-item">
-                <h4>Q: Is there correlation between elderly population and HDB prices?</h4>
-                <p>Key findings (2013-2018):</p>
-                <ul>
-                    <li>10% increase in elderly population correlates with 7% price decrease</li>
-                    <li>Areas with >30% elderly have 18% lower prices than average</li>
-                    <li>Exception: Central areas maintain high prices despite aging population</li>
-                </ul>
-            </div>
-        </div>
+    <p><strong>Background:</strong><br>
+    As Singapore’s population continues to age, certain HDB towns have seen rising elderly populations. This study explores whether towns with a higher proportion of elderly residents tend to have more affordable HDB flats.
+    </p>
 
-        <div class="analysis-section">
-            <h3>Data Sources</h3>
-            <ul>
-                <li>HDB Resale Price: <a href="https://data.gov.sg/dataset/resale-flat-prices" target="_blank">data.gov.sg</a></li>
-                <li>Population Trends: <a href="https://www.singstat.gov.sg/" target="_blank">Singapore Department of Statistics</a></li>
-                <li>Planning Boundaries: <a href="https://www.ura.gov.sg/" target="_blank">Urban Redevelopment Authority</a></li>
-            </ul>
-        </div>
+    <p><strong>Questions:</strong>
+    <ol>
+        <li>Do towns with a higher elderly population ratio have lower average HDB prices?</li>
+        <li>Which towns are most affordable for elderly households or multi-generation families?</li>
+        <li>Is the spatial distribution of price influenced more by demographics or geography?</li>
+    </ol>
+    </p>
+
+    <p><strong>Findings (2018 data):</strong>
+    <ul>
+        <li>Among towns with both datasets available, <strong>Sembawang, Yishun, and Jurong West</strong> have relatively <strong>high elderly ratios</strong> and <strong>lower flat prices</strong>, especially for 4- and 5-room flats.</li>
+        <li><strong>Jurong West</strong>: Avg. 4-room price ~$354k</li>
+        <li><strong>Sembawang</strong>: Avg. 4-room price ~$318k</li>
+        <li><strong>Yishun</strong>: Avg. 4-room price ~$326k</li>
+        <li>Correlation analysis (2013–2018): ~<strong>+31%</strong> correlation between elderly ratio and price, suggesting aging towns are not always cheaper.</li>
+    </ul>
+    </p>
+
+    <p><strong>Conclusion:</strong><br>
+    The map helps visualize how aging and affordability interact spatially in Singapore. Surprisingly, mature towns can remain expensive despite having higher elderly populations, challenging the assumption that aging = affordability.</p>
+</div>
+
+<div class="analysis-section">
+    <h3>Data Sources</h3>
+    <ul>
+        <li><strong>Elderly Population Data:</strong> <a href="https://www.singstat.gov.sg/" target="_blank">Singapore Department of Statistics</a></li>
+        <li><strong>HDB Price Ranges:</strong> <a href="https://data.gov.sg/dataset/price-range-of-hdb-flats-offered" target="_blank">data.gov.sg</a></li>
+        <li><strong>Planning Boundaries:</strong> <a href="https://www.ura.gov.sg/maps" target="_blank">Urban Redevelopment Authority</a></li>
+    </ul>
+</div>
     </div>
 
     <script>
@@ -399,5 +409,10 @@ svg.selectAll(".price-circle")
             render(2018, "All", true);
         });
     </script>
+
+    <footer style="text-align: center; margin-top: 3rem; font-size: 1rem; color: #888;">
+  Baorong Li - 1009456
+</footer>
+    
 </body>
 </html>
