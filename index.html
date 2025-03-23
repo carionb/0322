@@ -16,6 +16,16 @@
     }
     .controls { margin-bottom: 20px; }
     svg { border: 1px solid #ccc; }
+    .legend-box {
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    .example-qa {
+      margin-top: 40px;
+      border-top: 1px solid #ccc;
+      padding-top: 20px;
+      max-width: 900px;
+    }
   </style>
 </head>
 <body>
@@ -35,7 +45,6 @@
     <option>3-room</option>
     <option>4-room</option>
     <option>5-room</option>
-    <option>Executive</option>
   </select>
 
   <label style="margin-left: 20px;">
@@ -46,9 +55,31 @@
 <svg id="map" width="1000" height="600"></svg>
 <div id="tooltip" class="tooltip" style="opacity:0"></div>
 
+<!-- 图例 -->
+<div class="legend-box">
+  <h4>Legend</h4>
+  <p><strong>Color Fill:</strong> Elderly Proportion (darker red = higher)</p>
+  <p><strong>Circle Size & Color:</strong> Average HDB Price (larger & darker blue = more expensive)</p>
+</div>
+
+<!-- Example Q&A -->
+<div class="example-qa">
+  <h3>Example Questions & Answers (based on 2023 data)</h3>
+
+  <p><strong>Q:</strong> Where are the most affordable 2-room flats for elderly singles?</p>
+  <p><strong>A:</strong> Based on 2023 data, the most affordable towns for 2-room flats include:<br>
+    - PUNGGOL (~$153,500), JURONG WEST (~$162,000), SEMBAWANG (~$167,000)</p>
+
+  <p><strong>Q:</strong> Where are the most affordable flats for multi-generational families?</p>
+  <p><strong>A:</strong> Jurong West, Sembawang and Choa Chu Kang offer the lowest average prices for 2–5 room flats, ranging from ~$213,000 to ~$220,000.</p>
+
+  <p><strong>Q:</strong> Do flat prices get more expensive nearer to the city center?</p>
+  <p><strong>A:</strong> Unfortunately, central towns like Marine Parade, Toa Payoh, and Geylang have no 2023 price data in the dataset, so we cannot conclude directly. However, existing data shows that mature towns tend to have higher average prices.</p>
+</div>
+
 <script>
 const svg = d3.select("#map");
-const g = svg.append("g"); // for zoom group
+const g = svg.append("g"); // zoomable group
 const projection = d3.geoMercator().center([103.8, 1.35]).scale(45000).translate([500, 300]);
 const path = d3.geoPath().projection(projection);
 const tooltip = d3.select("#tooltip");
@@ -84,9 +115,7 @@ Promise.all([
   d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
 ])
 .then(([elderlyData, priceData, geoData]) => {
-  console.log("Elderly 数据:", elderlyData.length);
-  console.log("Price 数据:", priceData.length);
-  console.log("GeoJSON 区域:", geoData.features.length);
+  console.log("✅ Data Loaded:", elderlyData.length, priceData.length, geoData.features.length);
 
   priceData.forEach(d => {
     d.avg_price = (+d.min_selling_price + +d.max_selling_price) / 2;
@@ -112,9 +141,6 @@ Promise.all([
         .filter(d => d.SHS_year === +year)
         .map(d => [normalizeName(d["Town/estate"]), d])
     );
-
-    console.log("匹配老年人口区域数:", elderlyMap.size);
-    console.log("匹配地图区域数:", areaMap.size);
 
     g.selectAll("path")
       .data(geoData.features)
@@ -179,7 +205,7 @@ Promise.all([
 
   update();
 })
-.catch(error => console.error("数据加载失败:", error));
+.catch(error => console.error("❌ 数据加载失败:", error));
 </script>
 
 </body>
