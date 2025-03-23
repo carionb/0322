@@ -81,27 +81,7 @@
             backdrop-filter: blur(4px);
             font-size: 0.9rem;
             max-width: 280px;
-            z-index: 100;
         }
-        
-        .tooltip-grid {
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 0.5rem 1rem;
-            align-items: center;
-            }
-
-
-        .tooltip-label {
-            color: #7f8c8d;
-            font-weight: 500;
-            white-space: nowrap;
-            }
-
-            .tooltip strong {
-            color: var(--primary);
-            font-weight: 600;
-            }
 
         .legend {
             position: absolute;
@@ -140,18 +120,6 @@
                 flex-direction: column;
             }
         }
-
-        .price-circle {
-            pointer-events: visible;
-            mix-blend-mode: multiply;
-            }
-
-            path {
-              stroke: #fff !important;
-              stroke-width: 0.3 !important;
-              pointer-events: none;
-            }
-        
     </style>
 </head>
 <body>
@@ -237,8 +205,8 @@
     </div>
 
     <script>
-        const svgWidth = Math.min(window.innerWidth - 20, 1400);  // 增加最大宽度
-        const svgHeight = Math.min(svgWidth * 0.7, 800);         // 调高宽高比
+        const svgWidth = Math.min(window.innerWidth - 20, 1200);
+        const svgHeight = Math.min(svgWidth * 0.7, 800);
         
         const svg = d3.select("#map")
             .attr("width", svgWidth)
@@ -246,7 +214,7 @@
 
         const projection = d3.geoMercator()
             .center([103.8, 1.34])
-            .scale(svgWidth * 70)
+            .scale(svgWidth * 75)
             .translate([svgWidth/2, svgHeight/2]);
 
         const path = d3.geoPath().projection(projection);
@@ -295,122 +263,103 @@
                     .domain([0, d3.max(elderlyData, d => d.Elderly/d.Total)]);
 
                 // Draw regions
-               svg.selectAll("path")
-  .data(geoData.features)
-  .join("path")
-  .attr("d", path)
-  .attr("stroke", "white")
-  .attr("stroke-width", 0.5)
-  .attr("fill", d => {
-    const town = extractPLNAreaName(d.properties.Description);
-    const data = elderlyData.find(e => 
-      normalizeName(e["Town/estate"]) === normalizeName(town) && 
-      e.SHS_year === +year
-    );
-    return data ? elderScale(data.Elderly/data.Total) : "#eee";
-  })
-  .on("mouseover", (event, d) => {
-    const town = extractPLNAreaName(d.properties.Description);
-    const data = elderlyData.find(e => 
-      normalizeName(e["Town/estate"]) === normalizeName(town) && 
-      e.SHS_year === +year
-    );
-    
-    if (data) {
-      const htmlContent = `
-        <h3>${town}</h3>
-        <div class="tooltip-grid">
-          <span class="tooltip-label">Elderly Ratio</span>
-          <span>${(data.Elderly/data.Total*100).toFixed(1)}%</span>
-          <span class="tooltip-label">Total Population</span>
-          <span>${data.Total.toLocaleString()}</span>
-        </div>
-      `;
-      
-      tooltip.html(htmlContent)
-        .style("opacity", 1)
-        .style("left", `${event.pageX + 15}px`)
-        .style("top", `${event.pageY - 20}px`);
-    }
-  })
-  .on("mouseout", () => tooltip.style("opacity", 0));
+                svg.selectAll("path")
+                    .data(geoData.features)
+                    .join("path")
+                    .attr("d", path)
+                    .attr("stroke", "white")
+                    .attr("stroke-width", 0.5)
+                    .attr("fill", d => {
+                        const town = extractPLNAreaName(d.properties.Description);
+                        const data = elderlyData.find(e => 
+                            normalizeName(e["Town/estate"]) === normalizeName(town) && 
+                            e.SHS_year === +year
+                        );
+                        return data ? elderScale(data.Elderly/data.Total) : "#eee";
+                    })
+                    .on("mouseover", (event, d) => {
+                        const town = extractPLNAreaName(d.properties.Description);
+                        const data = elderlyData.find(e => 
+                            normalizeName(e["Town/estate"]) === normalizeName(town) && 
+                            e.SHS_year === +year
+                        );
+                        if (data) {
+                            tooltip.html(`
+                                <h3>${town}</h3>
+                                <p>Elderly: ${data.Elderly} (${(data.Elderly/data.Total*100).toFixed(1)}%)</p>
+                                <p>Total Population: ${data.Total}</p>
+                            `)
+                            .style("opacity", 1)
+                            .style("left", `${event.pageX + 15}px`)
+                            .style("top", `${event.pageY - 20}px`);
+                        }
+                    })
+                    .on("mouseout", () => tooltip.style("opacity", 0));
 
-if (showPrice) {
-  let filteredData;
-  if (roomType === "All") {
-    const townMap = d3.rollup(
-      priceData.filter(d => d.financial_year === +year),
-      v => ({
-        avg: d3.mean(v, x => x.avg_price),
-        town_name: v[0]["Town/estate"]
-      }),
-      d => d.norm_town
-    );
-    filteredData = Array.from(townMap, ([town, data]) => ({
-      norm_town: town,
-      avg_price: data.avg,
-      town_name: data.town_name
-    }));
-  } else {
-    filteredData = priceData.filter(d => 
-      d.financial_year === +year &&
-      d.room_type.toLowerCase() === roomType.toLowerCase()
-    );
-  }
+                if (showPrice) {
+                    let filteredData;
+                    if (roomType === "All") {
+                        const townMap = d3.rollup(
+                            priceData.filter(d => d.financial_year === +year),
+                            v => d3.mean(v, x => x.avg_price),
+                            d => d.norm_town
+                        );
+                        filteredData = Array.from(townMap, ([town, price]) => ({
+                            norm_town: town,
+                            avg_price: price,
+                            town_name: priceData.find(d => d.norm_town === town)["Town/estate"]
+                        }));
+                    } else {
+                        filteredData = priceData.filter(d => 
+                            d.financial_year === +year &&
+                            d.room_type.toLowerCase() === roomType.toLowerCase()
+                        );
+                    }
 
-  const priceExtent = d3.extent(filteredData, d => d.avg_price);
-  const radiusScale = d3.scaleSqrt()
-    .domain(priceExtent)
-    .range([3, svgWidth/30]);
+                    const priceExtent = d3.extent(filteredData, d => d.avg_price);
+                    const radiusScale = d3.scaleSqrt()
+                        .domain(priceExtent)
+                        .range([3, svgWidth/30]);
 
-  const priceColor = d3.scaleSequential(d3.interpolateBlues)
-    .domain(priceExtent);
+                    const priceColor = d3.scaleSequential(d3.interpolateBlues)
+                        .domain(priceExtent);
 
-  svg.selectAll(".price-circle")
-    .data(filteredData)
-    .join("circle")
-    .attr("class", "price-circle")
-    .attr("cx", d => {
-      const loc = areaMap.get(d.norm_town);
-      return loc ? projection(loc.centroid)[0] : null;
-    })
-    .attr("cy", d => {
-      const loc = areaMap.get(d.norm_town);
-      return loc ? projection(loc.centroid)[1] : null;
-    })
-    .attr("r", 0)
-    .transition().duration(600)
-    .attr("r", d => radiusScale(d.avg_price))
-    .attr("fill", d => priceColor(d.avg_price))
-    .attr("stroke", "white")
-    .attr("stroke-width", 1.5)
-    .on("mouseover", (event, d) => {
-      const data = elderlyData.find(e => 
-        normalizeName(e["Town/estate"]) === d.norm_town &&
-        e.SHS_year === +year
-      );
-      
-      const formatPrice = (value) => {
-        if (!value) return 'N/A';
-        return `S$${Math.round(value).toLocaleString('en-SG')}`;
-      };
+                    svg.selectAll(".price-circle")
+                        .data(filteredData)
+                        .join("circle")
+                        .attr("class", "price-circle")
+                        .attr("cx", d => {
+                            const loc = areaMap.get(d.norm_town);
+                            return loc ? projection(loc.centroid)[0] : null;
+                        })
+                        .attr("cy", d => {
+                            const loc = areaMap.get(d.norm_town);
+                            return loc ? projection(loc.centroid)[1] : null;
+                        })
+                        .attr("r", 0)
+                        .transition().duration(600)
+                        .attr("r", d => radiusScale(d.avg_price))
+                        .attr("fill", d => priceColor(d.avg_price))
+                        .attr("stroke", "white")
+                        .attr("stroke-width", 1.5)
+                        .on("mouseover", (event, d) => {
+                            const data = elderlyData.find(e => 
+                                normalizeName(e["Town/estate"]) === d.norm_town &&
+                                e.SHS_year === +year
+                            );
+                            tooltip.html(`
+                                <h3>${d.town_name}</h3>
+                                <p>${roomType === "All" ? "Average" : roomType} Price: $${d.avg_price.toLocaleString()}</p>
+                                <p>Elderly Ratio: ${data ? (data.Elderly/data.Total*100).toFixed(1)+'%' : 'N/A'}</p>
+                            `)
+                            .style("opacity", 1)
+                            .style("left", `${event.pageX + 15}px`)
+                            .style("top", `${event.pageY - 20}px`);
+                        })
+                        .on("mouseout", () => tooltip.style("opacity", 0));
+                }
+            }
 
-      tooltip.html(`
-        <h3>${d.town_name}</h3>
-        <div class="tooltip-grid">
-          <span class="tooltip-label">${roomType === "All" ? "Average" : roomType} Price</span>
-          <span>${formatPrice(d.avg_price)}</span>
-          <span class="tooltip-label">Elderly Ratio</span>
-          <span>${data ? (data.Elderly/data.Total*100).toFixed(1)+'%' : 'N/A'}</span>
-        </div>
-      `)
-      .style("opacity", 1)
-      .style("left", `${event.pageX + 15}px`)
-      .style("top", `${event.pageY - 20}px`);
-    })
-    .on("mouseout", () => tooltip.style("opacity", 0));
-}
-                
             d3.selectAll("select, #toggle-price")
                 .on("change", () => render(
                     document.getElementById("year-select").value,
