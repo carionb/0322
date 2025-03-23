@@ -152,10 +152,12 @@
             </div>
 
             <div class="control-group">
-                <input type="checkbox" id="toggle-price" hidden>
-                <label for="toggle-price" class="switch"></label>
-                <label for="toggle-price">Show Prices</label>
-            </div>
+  <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+    <input type="checkbox" id="toggle-price" style="accent-color: var(--secondary); width: 18px; height: 18px;">
+    <span style="font-size: 0.95rem;">Show Prices</span>
+  </label>
+</div>
+
         </div>
 
         <div class="map-container">
@@ -346,7 +348,6 @@
                     const priceColor = d3.scaleSequential(d3.interpolateBlues)
                         .domain(priceExtent);
 
-                    // Draw price circles
                    // Draw price circles
 svg.selectAll(".price-circle")
     .data(filteredData)
@@ -430,7 +431,7 @@ svg.selectAll(".price-circle")
                     document.getElementById("toggle-price").checked
                 ));
 
-            render(2018, "All", true);
+            render(2018, "All", false);
         });
     </script>
 
