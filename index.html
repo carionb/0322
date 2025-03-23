@@ -5,17 +5,18 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         .map-container { 
-            width: 1000px;
-            height: 800px;
+            width: 1200px;
+            height: 1000px;
             border: 1px solid #ccc;
         }
         .tooltip {
             position: absolute;
             padding: 8px;
-            background: white;
+            background: rgba(255,255,255,0.9);
             border: 1px solid #ddd;
             pointer-events: none;
             font-family: Arial;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
         }
     </style>
 </head>
@@ -24,7 +25,7 @@
 
 <script>
 // 初始化配置
-const width = 1000, height = 800;
+const width = 1200, height = 1000;
 
 // 加载数据
 Promise.all([
@@ -36,10 +37,10 @@ Promise.all([
     console.log("GeoJSON属性字段示例:", geoData.features[0].properties);
     console.log("CSV字段示例:", elderlyData[0]);
 
-    // 创建投影（根据新加坡坐标优化）
+    // 创建投影（根据新数据优化）
     const projection = d3.geoMercator()
         .center([103.8, 1.35])  // 新加坡中心坐标
-        .scale(35000)
+        .scale(45000)           // 调整后的最佳缩放比例
         .translate([width/2, height/2]);
 
     const path = d3.geoPath().projection(projection);
@@ -55,20 +56,22 @@ Promise.all([
         .data(geoData.features)
         .enter().append("path")
         .attr("d", path)
-        .attr("fill", "#f0f0f0")
-        .attr("stroke", "#666");
+        .attr("fill", "#f8f8f8")
+        .attr("stroke", "#666")
+        .attr("stroke-width", 0.5);
 
     // 创建名称匹配系统
     const normalizeName = (name) => 
-        name.trim().toUpperCase().replace(/\s+/g, "_");
+        name.trim().toUpperCase().replace(/[^A-Z]/g, "");
 
-    // 构建规划区坐标映射
-    const planningAreaMap = new Map();
+    // 构建区域坐标映射
+    const areaMap = new Map();
     geoData.features.forEach(feature => {
-        const areaName = feature.properties["Planning Area Name"];
-        if (areaName) {
+        const rawName = feature.properties.PLN_AREA_N; // 关键字段
+        if (rawName) {
+            const normalized = normalizeName(rawName);
             const centroid = d3.geoCentroid(feature);
-            planningAreaMap.set(normalizeName(areaName), {
+            areaMap.set(normalized, {
                 centroid: centroid,
                 feature: feature
             });
@@ -76,36 +79,64 @@ Promise.all([
     });
 
     // 调试输出匹配结果
-    console.log("GeoJSON规划区名称:", 
-        Array.from(planningAreaMap.keys()));
-    console.log("CSV中的地区名称:", 
-        elderlyData.map(d => normalizeName(d['Town/estate'])));
+    console.log("GeoJSON区域列表:", Array.from(areaMap.keys()));
+    console.log("CSV区域列表:", 
+        [...new Set(elderlyData.map(d => normalizeName(d['Town/estate'])))]);
 
-    // 添加数据点
+    // 创建颜色比例尺
+    const maxRatio = d3.max(elderlyData, d => d.Elderly/d.Total);
+    const colorScale = d3.scaleSequential(d3.interpolateReds)
+        .domain([0, maxRatio]);
+
+    // 添加数据点（使用2018年数据）
     svg.selectAll("circle")
         .data(elderlyData.filter(d => d.SHS_year === 2018))
         .enter().append("circle")
         .attr("cx", d => {
             const key = normalizeName(d['Town/estate']);
-            const info = planningAreaMap.get(key);
+            const info = areaMap.get(key);
             return info ? projection(info.centroid)[0] : -1000;
         })
         .attr("cy", d => {
             const key = normalizeName(d['Town/estate']);
-            const info = planningAreaMap.get(key);
+            const info = areaMap.get(key);
             return info ? projection(info.centroid)[1] : -1000;
         })
-        .attr("r", 8)
-        .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total))
+        .attr("r", d => Math.sqrt(d.Total)/50) // 半径按总人口缩放
+        .attr("fill", d => colorScale(d.Elderly/d.Total))
         .attr("stroke", "#333")
+        .attr("stroke-width", 0.5)
+        .attr("opacity", 0.8)
         .on("mouseover", function(event, d) {
-            d3.select(this).attr("r", 12);
+            d3.select(this).attr("r", Math.sqrt(d.Total)/40);
             showTooltip(event, d);
         })
         .on("mouseout", function(event, d) {
-            d3.select(this).attr("r", 8);
+            d3.select(this).attr("r", Math.sqrt(d.Total)/50);
             hideTooltip();
         });
+
+    // 添加图例
+    const legend = svg.append("g")
+        .attr("transform", "translate(50,50)");
+
+    const legendScale = d3.scaleLinear()
+        .domain([0, maxRatio])
+        .range([0, 200]);
+
+    legend.selectAll("rect")
+        .data(d3.range(0, 1, 0.1))
+        .enter().append("rect")
+        .attr("x", d => legendScale(d))
+        .attr("y", 0)
+        .attr("width", 20)
+        .attr("height", 15)
+        .attr("fill", d => d3.interpolateReds(d));
+
+    legend.append("text")
+        .attr("x", 0)
+        .attr("y", -5)
+        .text("老年人口比例");
 
     // 工具提示
     const tooltip = d3.select("body").append("div").attr("class", "tooltip");
@@ -113,13 +144,15 @@ Promise.all([
     function showTooltip(event, d) {
         tooltip
             .html(`
-                <strong>${d['Town/estate']}</strong><br>
-                老年人口: ${d.Elderly.toLocaleString()}<br>
-                总人口: ${d.Total.toLocaleString()}<br>
-                占比: ${(d.Elderly/d.Total*100).toFixed(1)}%
+                <div style="color:#333">
+                    <h4>${d['Town/estate']}</h4>
+                    <p>🏙️ 总人口: ${d.Total.toLocaleString()}</p>
+                    <p>👵 老年人口: ${d.Elderly.toLocaleString()}</p>
+                    <p>📈 老年比例: ${(d.Elderly/d.Total*100).toFixed(1)}%</p>
+                </div>
             `)
-            .style("left", event.pageX + 15 + "px")
-            .style("top", event.pageY + 15 + "px")
+            .style("left", event.pageX + 20 + "px")
+            .style("top", event.pageY + 20 + "px")
             .style("opacity", 1);
     }
 
