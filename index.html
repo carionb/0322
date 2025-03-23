@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Singapore Elderly Population & HDB Prices</title>
+  <meta charset="UTF-8">
+  <title>Singapore Elderly Population with HDB Prices Overlay</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <style>
     body { font-family: Arial; margin: 20px; }
@@ -16,7 +16,6 @@
       font-size: 12px;
     }
     .controls { margin-bottom: 20px; }
-    select { margin-right: 20px; }
   </style>
 </head>
 <body>
@@ -30,11 +29,9 @@
     <option selected>2018</option>
   </select>
 
-  <label>View Mode:</label>
-  <select id="view-select">
-    <option value="elderly">Elderly Proportion</option>
-    <option value="price">Average HDB Price</option>
-  </select>
+  <label style="margin-left:20px">
+    <input type="checkbox" id="toggle-price" /> Show HDB Prices
+  </label>
 </div>
 
 <svg id="map"></svg>
@@ -84,9 +81,7 @@ Promise.all([
     }
   });
 
-  function drawMap(year, mode) {
-    svg.selectAll("*").remove();
-
+  function drawRegions(year) {
     const filteredElderly = elderlyData.filter(d => d.SHS_year === +year);
     const elderlyMap = new Map(filteredElderly.map(d => [normalizeName(d["Town/estate"]), d]));
 
@@ -99,56 +94,56 @@ Promise.all([
         const town = extractPLNAreaName(d.properties.Description);
         const key = normalizeName(town);
         const data = elderlyMap.get(key);
-        if (mode === "elderly") {
-          return data ? d3.interpolateReds(data.Elderly / data.Total) : "#eee";
-        } else {
-          return "#f5f5f5";
-        }
+        return data ? d3.interpolateReds(data.Elderly / data.Total) : "#eee";
       });
+  }
 
-    if (mode === "price") {
-      const townPrices = priceRollup.get(String(year)) || new Map();
-      const maxPrice = d3.max(Array.from(townPrices.values()));
+  function drawPriceCircles(year) {
+    svg.selectAll("circle").remove();
 
-      svg.selectAll("circle")
-        .data(Array.from(townPrices.entries()))
-        .join("circle")
-        .attr("cx", ([town, price]) => {
-          const loc = areaMap.get(town);
-          return loc ? projection(loc.centroid)[0] : -999;
-        })
-        .attr("cy", ([town, price]) => {
-          const loc = areaMap.get(town);
-          return loc ? projection(loc.centroid)[1] : -999;
-        })
-        .attr("r", ([, price]) => Math.sqrt(price) / 500)
-        .attr("fill", ([, price]) => d3.interpolateBlues(price / maxPrice))
-        .attr("opacity", 0.8)
-        .on("mouseover", (event, [town, price]) => {
-          const data = elderlyMap.get(town);
-          tooltip
-            .html(`<strong>${town}</strong><br>
-                   Elderly: ${data?.Elderly ?? "?"}<br>
-                   Total: ${data?.Total ?? "?"}<br>
-                   Price: $${Math.round(price)}`)
-            .style("left", event.pageX + 10 + "px")
-            .style("top", event.pageY + 10 + "px")
-            .style("opacity", 1);
-        })
-        .on("mouseout", () => tooltip.style("opacity", 0));
-    }
+    const townPrices = priceRollup.get(String(year)) || new Map();
+    const maxPrice = d3.max(Array.from(townPrices.values()));
+
+    svg.selectAll("circle")
+      .data(Array.from(townPrices.entries()))
+      .join("circle")
+      .attr("cx", ([town, price]) => {
+        const loc = areaMap.get(town);
+        return loc ? projection(loc.centroid)[0] : -999;
+      })
+      .attr("cy", ([town, price]) => {
+        const loc = areaMap.get(town);
+        return loc ? projection(loc.centroid)[1] : -999;
+      })
+      .attr("r", ([, price]) => Math.sqrt(price) / 500)
+      .attr("fill", ([, price]) => d3.interpolateBlues(price / maxPrice))
+      .attr("opacity", 0.8)
+      .on("mouseover", (event, [town, price]) => {
+        const elderlyEntry = elderlyData.find(d => normalizeName(d["Town/estate"]) === town && d.SHS_year === +year);
+        tooltip
+          .html(`<strong>${town}</strong><br>
+                 Elderly: ${elderlyEntry?.Elderly ?? "?"}<br>
+                 Total: ${elderlyEntry?.Total ?? "?"}<br>
+                 Price: $${Math.round(price)}`)
+          .style("left", event.pageX + 10 + "px")
+          .style("top", event.pageY + 10 + "px")
+          .style("opacity", 1);
+      })
+      .on("mouseout", () => tooltip.style("opacity", 0));
   }
 
   function update() {
     const year = document.getElementById("year-select").value;
-    const mode = document.getElementById("view-select").value;
-    drawMap(year, mode);
+    const showPrice = document.getElementById("toggle-price").checked;
+    drawRegions(year);
+    if (showPrice) drawPriceCircles(year);
+    else svg.selectAll("circle").remove();
   }
 
   document.getElementById("year-select").addEventListener("change", update);
-  document.getElementById("view-select").addEventListener("change", update);
+  document.getElementById("toggle-price").addEventListener("change", update);
 
-  update(); // Initial render
+  update(); // initial draw
 });
 </script>
 
