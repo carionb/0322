@@ -41,6 +41,15 @@
         <div id="chart-container"></div>
     </div>
     <div class="dropdown">
+        <label for="year-select">Select Year:</label>
+        <select id="year-select">
+            <option value="2003">2003</option>
+            <option value="2008">2008</option>
+            <option value="2013">2013</option>
+            <option value="2018" selected>2018</option>
+        </select>
+        <br><br>
+        <label for="indicator-select">Select Indicator:</label>
         <select id="indicator-select">
             <option value="Proportion Of Elderly Residents (65 Years & Over) Among Resident Population">Proportion of Elderly Residents</option>
             <option value="Sex Ratio Of Elderly Residents (65 Years & Over)">Sex Ratio of Elderly Residents</option>
@@ -49,19 +58,16 @@
     </div>
 
 <script>
-// Configurations
 const mapWidth = 1000, mapHeight = 600;
 const chartWidth = 1000, chartHeight = 400;
 const margin = { top: 30, right: 30, bottom: 50, left: 60 };
 
-// Load data
 Promise.all([
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/elderly.csv", d3.autoType),
     d3.csv("https://raw.githubusercontent.com/carionb/0322/main/KeyIndicatorsOnTheElderlyAnnual.csv", d3.autoType),
-    d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson")
+    d3.json("https://raw.githubusercontent.com/carionb/0322/main/MasterPlan2019PlanningAreaBoundaryNoSea.geojson.json")
 ]).then(([elderlyData, indicatorData, geoData]) => {
 
-    // Map Visualization
     const projection = d3.geoMercator()
         .center([103.8, 1.35])
         .scale(45000)
@@ -81,36 +87,57 @@ Promise.all([
         .attr("fill", "#f0f0f0")
         .attr("stroke", "#666");
 
-    const normalizeName = (name) => 
-        name.trim().toUpperCase().replace(/[^A-Z]/g, "");
+    const normalizeName = (name) => name.trim().toUpperCase().replace(/[^A-Z]/g, "");
+
+    function extractPLNAreaName(html) {
+        const match = html.match(/PLN_AREA_N<\/th>\s*<td>(.*?)<\/td>/);
+        return match ? match[1] : null;
+    }
 
     const areaMap = new Map();
     geoData.features.forEach(feature => {
-        const rawName = feature.properties.PLN_AREA_N;
+        const rawName = extractPLNAreaName(feature.properties.Description || "");
         if (rawName) {
             const normalized = normalizeName(rawName);
             areaMap.set(normalized, d3.geoCentroid(feature));
         }
     });
 
-    svgMap.selectAll("circle")
-        .data(elderlyData.filter(d => d.SHS_year === 2018))
-        .enter().append("circle")
-        .attr("cx", d => {
-            const key = normalizeName(d['Town/estate']);
-            return projection(areaMap.get(key))[0] || -1000;
-        })
-        .attr("cy", d => {
-            const key = normalizeName(d['Town/estate']);
-            return projection(areaMap.get(key))[1] || -1000;
-        })
-        .attr("r", d => Math.sqrt(d.Total)/50)
-        .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total))
-        .attr("opacity", 0.8)
-        .on("mouseover", showMapTooltip)
-        .on("mouseout", hideTooltip);
+    function drawCircles(selectedYear) {
+        const filteredData = elderlyData.filter(d => d.SHS_year === +selectedYear);
 
-    // Line Chart
+        const circles = svgMap.selectAll("circle")
+            .data(filteredData, d => d['Town/estate']);
+
+        circles.join(
+            enter => enter.append("circle")
+                .attr("cx", d => {
+                    const key = normalizeName(d['Town/estate']);
+                    return projection(areaMap.get(key))[0] || -1000;
+                })
+                .attr("cy", d => {
+                    const key = normalizeName(d['Town/estate']);
+                    return projection(areaMap.get(key))[1] || -1000;
+                })
+                .attr("r", d => Math.sqrt(d.Total)/50)
+                .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total))
+                .attr("opacity", 0.8)
+                .on("mouseover", showMapTooltip)
+                .on("mouseout", hideTooltip),
+            update => update
+                .transition().duration(500)
+                .attr("r", d => Math.sqrt(d.Total)/50)
+                .attr("fill", d => d3.interpolateReds(d.Elderly/d.Total)),
+            exit => exit.remove()
+        );
+    }
+
+    drawCircles(document.getElementById("year-select").value);
+
+    document.getElementById("year-select").addEventListener("change", function() {
+        drawCircles(this.value);
+    });
+
     const svgChart = d3.select("#chart-container")
         .append("svg")
         .attr("width", chartWidth)
