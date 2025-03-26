@@ -71,7 +71,7 @@
     <p>
       I hypothesize that there is a positive correlation between the overall vehicle population in Singapore and COE premiums.
       As the vehicle population increases, the demand for vehicles intensifies, driving up COE bidding prices.
-      In addition, the regulatory changes implemented in May 2022—which altered the eligibility criteria for certain COE categories—
+      Additionally, the regulatory changes implemented in May 2022—which altered the eligibility criteria for certain COE categories—
       might have introduced a noticeable shift in the premium trends.
     </p>
     <p>
@@ -79,7 +79,7 @@
       <strong>COE Bidding Results / Prices</strong> (with monthly data in the format "10-Jan" representing 2010-01)
       and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (with yearly data from 2005 to 2025).
       The chart features a dual-axis time series: the left y-axis shows COE premiums and the right y-axis displays the aggregated vehicle population.
-      Interactive filters allow you to select COE Category, Vehicle Category, Vehicle Type, and Year.
+      Interactive filters allow selection by COE Category, Vehicle Category, Vehicle Type, and Year.
     </p>
   </div>
 
@@ -131,12 +131,12 @@
     .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
 
   // 定义日期解析函数
-  // COE 数据中 Month 字段格式为 "10-Jan"（即两位年份-月份缩写）
+  // COE 数据中 Month 字段格式为 "10-Jan"（两位年份-月份缩写）
   const parseCoeDate = d3.timeParse("%y-%b");
   // 车辆数据中 year 字段格式为 "2005"
   const parseVehicleYear = d3.timeParse("%Y");
 
-  // CSV 文件的 URL —— 请确保路径正确（GitHub raw 链接）
+  // CSV 文件的 URL —— 请确保路径正确
   const coeURL = "https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv";
   const vehicleURL = "https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv";
 
@@ -148,14 +148,15 @@
     console.log("First row of COE data:", coeData[0]);
     console.log("First row of Vehicle data:", vehicleData[0]);
 
-    // 处理 COE 数据：字段 "Month", "Vehicle Class", "Premium"
+    // 处理 COE 数据：
+    // 如果 d.Month 已经是 Date 对象，则直接使用；否则用 parseCoeDate 解析
     const processedCoeData = coeData.map(d => ({
-      date: parseCoeDate(d.Month),
+      date: (d.Month instanceof Date) ? d.Month : parseCoeDate(d.Month),
       vehicle_class: d["Vehicle Class"],
       premium: d.Premium
     })).filter(d => d.date);
 
-    // 处理车辆数据：字段 "year", "category", "type", "number"
+    // 处理车辆数据：将 "year" 转为日期对象（代表当年1月1日）
     const processedVehicleData = vehicleData.map(d => ({
       year: new Date(d.year, 0, 1),
       category: d.category,
@@ -177,7 +178,7 @@
     console.error("Error loading CSV data:", error);
   });
 
-  // 初始化筛选器：提取 COE 与车辆数据中的独特值
+  // 初始化筛选器：提取 COE 和车辆数据中的独特值
   function initFilters(coeData, vehicleData) {
     const coeCategories = [...new Set(coeData.map(d => d.vehicle_class))];
     const coeSelect = d3.select("#coeCategorySelect");
@@ -237,7 +238,7 @@
       filteredVehicleData = filteredVehicleData.filter(d => d.year.getFullYear() == selectedYear);
     }
 
-    // 按年份聚合车辆数据（忽略 category 和 type）
+    // 按年份聚合车辆数据（不区分 category 和 type）
     const vehicleAggregation = d3.rollup(
       filteredVehicleData,
       v => d3.sum(v, d => d.number),
@@ -334,7 +335,7 @@
       .attr("d", vehicleLine);
 
     // 添加垂直注释线，标注 COE 定义变化（2022年5月）
-    // 注意，注释日期字符串必须符合 "%y-%b" 格式，此处使用 "22-May"
+    // 这里使用 "22-May" 来解析得到 2022年5月的日期
     const changeDate = parseCoeDate("22-May");
     chart.selectAll(".change-line").remove();
     chart.append("line")
