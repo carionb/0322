@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive Visualization: COE Prices & Vehicle Population</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    #description {
+      margin-bottom: 20px;
+    }
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+    }
+    .line {
+      fill: none;
+      stroke-width: 2px;
+    }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      background: lightsteelblue;
+      padding: 5px;
+      border: 1px solid #000;
+      pointer-events: none;
+      opacity: 0;
+    }
+    .brush .selection {
+      fill: #777;
+      fill-opacity: 0.3;
+      stroke: #fff;
+    }
+    .checkbox-container {
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Hypothesis Description -->
+  <div id="description">
+    <h2>Hypothesis and Data Description</h2>
+    <p>
+      I hypothesize that there is a positive correlation between COE bidding prices and the overall vehicle population in Singapore. As the vehicle population increases, the demand for vehicle ownership intensifies, which may drive up COE bidding prices. Conversely, periods with a declining vehicle population might correspond with lower COE prices.
+    </p>
+    <p>
+      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). To explore the hypothesis, I implemented a dual-axis time series chart where COE prices are plotted on the left y-axis and the total vehicle count is displayed on the right y-axis. Interactive features—such as filtering through checkboxes and brushing to select specific time ranges—allow for a more detailed examination of trends and fluctuations.
+    </p>
+  </div>
+  
+  <!-- Filtering Checkboxes -->
+  <div class="checkbox-container">
+    <label><input type="checkbox" id="toggleCoe" checked> Show COE Bidding Prices</label>
+    <label><input type="checkbox" id="toggleVehicle" checked> Show Total Vehicle Count</label>
+  </div>
+  
+  <!-- Chart Container -->
+  <svg id="chart" width="900" height="500"></svg>
+  <div class="tooltip" id="tooltip"></div>
+  
+  <script>
+    const margin = {top: 50, right: 60, bottom: 100, left: 60};
+    const width = 900 - margin.left - margin.right;
+    const height = 500 - margin.top - margin.bottom;
+    
+    // Create main SVG group
+    const svg = d3.select("#chart")
+                  .append("g")
+                  .attr("transform", `translate(${margin.left},${margin.top})`);
+                  
+    // Date parsing functions (adjust according to your CSV date formats)
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const parseYear = d3.timeParse("%Y");
+    
+    let coeData, vehicleData;
+    
+    // Load both CSV files from GitHub.
+    // Adjust URLs if your branch is not "main" or files are in a different folder.
+    Promise.all([
+      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv"),
+      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv")
+    ]).then(data => {
+      coeData = data[0];
+      vehicleData = data[1];
+      
+      // Process COE data (assuming CSV fields "date" and "price")
+      coeData.forEach(d => {
+        d.date = parseDate(d.date);
+        d.price = +d.price;
+      });
+      
+      // Process vehicle population data (assuming field "Year" and vehicle types "Car", "LGV", "HGV", "VHGV")
+      vehicleData.forEach(d => {
+        d.Year = parseYear(d.Year);
+        // Calculate total vehicle count (adjust if necessary)
+        d.total = +d.Car + +d.LGV + +d.HGV + +d.VHGV;
+      });
+      
+      // Determine the overall x-axis time range from both datasets
+      const xExtentCoe = d3.extent(coeData, d => d.date);
+      const xExtentVehicle = d3.extent(vehicleData, d => d.Year);
+      const xDomain = [d3.min([xExtentCoe[0], xExtentVehicle[0]]),
+                       d3.max([xExtentCoe[1], xExtentVehicle[1]])];
+      
+      // Global x-scale (will be updated during brushing)
+      let x = d3.scaleTime().domain(xDomain).range([0, width]);
+      
+      // y-axis scales
+      const y0 = d3.scaleLinear()
+                   .domain([0, d3.max(coeData, d => d.price)]).nice()
+                   .range([height, 0]);
+      const y1 = d3.scaleLinear()
+                   .domain([0, d3.max(vehicleData, d => d.total)]).nice()
+                   .range([height, 0]);
+      
+      // Add axis groups
+      const xAxisGroup = svg.append("g")
+                            .attr("class", "x axis")
+                            .attr("transform", `translate(0, ${height})`);
+      const yAxisLeftGroup = svg.append("g")
+                                .attr("class", "y axis");
+      const yAxisRightGroup = svg.append("g")
+                                 .attr("class", "y axis")
+                                 .attr("transform", `translate(${width},0)`);
+      
+      // Draw initial axes
+      xAxisGroup.call(d3.axisBottom(x));
+      yAxisLeftGroup.call(d3.axisLeft(y0))
+                    .append("text")
+                    .attr("fill", "steelblue")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", -50)
+                    .attr("dy", "0.71em")
+                    .attr("text-anchor", "end")
+                    .text("COE Price");
+      yAxisRightGroup.call(d3.axisRight(y1))
+                     .append("text")
+                     .attr("fill", "orange")
+                     .attr("transform", "rotate(-90)")
+                     .attr("y", 40)
+                     .attr("dy", "0.71em")
+                     .attr("text-anchor", "end")
+                     .text("Total Vehicle Count");
+      
+      // Line generators
+      const lineCoe = d3.line()
+                        .x(d => x(d.date))
+                        .y(d => y0(d.price));
+      const lineVehicle = d3.line()
+                            .x(d => x(d.Year))
+                            .y(d => y1(d.total));
+      
+      // Draw lines
+      const coePath = svg.append("path")
+                         .datum(coeData)
+                         .attr("class", "line")
+                         .attr("stroke", "steelblue")
+                         .attr("d", lineCoe);
+      const vehiclePath = svg.append("path")
+                             .datum(vehicleData)
+                             .attr("class", "line")
+                             .attr("stroke", "orange")
+                             .attr("d", lineVehicle);
+      
+      // Add tooltip functionality
+      const tooltip = d3.select("#tooltip");
+      
+      // COE data tooltip
+      svg.selectAll(".dot-coe")
+         .data(coeData)
+         .enter()
+         .append("circle")
+         .attr("class", "dot-coe")
+         .attr("cx", d => x(d.date))
+         .attr("cy", d => y0(d.price))
+         .attr("r", 3)
+         .attr("fill", "steelblue")
+         .on("mouseover", (event, d) => {
+           tooltip.transition().duration(200).style("opacity", 0.9);
+           tooltip.html(`Date: ${d3.timeFormat("%Y-%m-%d")(d.date)}<br/>Price: ${d.price}`)
+                  .style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 28) + "px");
+         })
+         .on("mouseout", () => {
+           tooltip.transition().duration(500).style("opacity", 0);
+         });
+      
+      // Vehicle data tooltip
+      svg.selectAll(".dot-vehicle")
+         .data(vehicleData)
+         .enter()
+         .append("circle")
+         .attr("class", "dot-vehicle")
+         .attr("cx", d => x(d.Year))
+         .attr("cy", d => y1(d.total))
+         .attr("r", 3)
+         .attr("fill", "orange")
+         .on("mouseover", (event, d) => {
+           tooltip.transition().duration(200).style("opacity", 0.9);
+           tooltip.html(`Year: ${d3.timeFormat("%Y")(d.Year)}<br/>Total: ${d.total}`)
+                  .style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 28) + "px");
+         })
+         .on("mouseout", () => {
+           tooltip.transition().duration(500).style("opacity", 0);
+         });
+      
+      // ---------------------------
+      // Add brushing functionality
+      // ---------------------------
+      // Create a brush in a 40px high area
+      const brush = d3.brushX()
+                      .extent([[0, 0], [width, 40]])
+                      .on("brush end", brushed);
+      
+      // Append the brush area above the chart
+      const brushGroup = svg.append("g")
+                            .attr("class", "brush")
+                            .attr("transform", `translate(0, ${-50})`)
+                            .call(brush);
+      
+      function brushed({selection}) {
+        if (selection) {
+          // Convert the pixel selection to a new time domain
+          const newDomain = selection.map(x.invert);
+          x.domain(newDomain);
+          // Update axes and lines with the new x domain
+          xAxisGroup.call(d3.axisBottom(x));
+          coePath.attr("d", lineCoe);
+          vehiclePath.attr("d", lineVehicle);
+          // Update positions of data points
+          svg.selectAll(".dot-coe").attr("cx", d => x(d.date));
+          svg.selectAll(".dot-vehicle").attr("cx", d => x(d.Year));
+        }
+      }
+      
+      // ---------------------------
+      // Add interactive filtering using checkboxes
+      // ---------------------------
+      d3.select("#toggleCoe").on("change", function() {
+        const display = this.checked ? null : "none";
+        coePath.style("display", display);
+        svg.selectAll(".dot-coe").style("display", display);
+      });
+      
+      d3.select("#toggleVehicle").on("change", function() {
+        const display = this.checked ? null : "none";
+        vehiclePath.style("display", display);
+        svg.selectAll(".dot-vehicle").style("display", display);
+      });
+    });
+  </script>
+</body>
+</html>
