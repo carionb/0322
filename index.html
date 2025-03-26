@@ -2,46 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Optimized Interactive Visualization: COE Prices & Vehicle Population</title>
+  <title></title>Interactive Visualization: COE Prices & Vehicle Population</title>
   <script src="https://d3js.org/d3.v6.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    #description {
-      margin-bottom: 20px;
-    }
-    .axis path,
-    .axis line {
-      fill: none;
-      stroke: #000;
-    }
-    .grid line {
-      stroke: #ccc;
-      stroke-dasharray: 3 3;
-    }
-    .line {
-      fill: none;
-      stroke-width: 2px;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #description { margin-bottom: 20px; }
+    .axis path, .axis line { fill: none; stroke: #000; }
+    .grid line { stroke: #ccc; stroke-dasharray: 3 3; }
+    .line { fill: none; stroke-width: 2px; }
     .tooltip {
-      position: absolute;
-      text-align: center;
-      background: lightsteelblue;
-      padding: 5px;
-      border: 1px solid #000;
-      pointer-events: none;
-      opacity: 0;
+      position: absolute; text-align: center;
+      background: lightsteelblue; padding: 5px;
+      border: 1px solid #000; pointer-events: none; opacity: 0;
     }
-    .brush .selection {
-      fill: #777;
-      fill-opacity: 0.3;
-      stroke: #fff;
-    }
-    .checkbox-container {
-      margin-bottom: 10px;
-    }
+    .brush .selection { fill: #777; fill-opacity: 0.3; stroke: #fff; }
+    .checkbox-container { margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -99,23 +74,40 @@
     
     // Load CSV files from GitHub (adjust URLs if necessary)
     Promise.all([
-      // For COE data, assume the CSV has fields "Bidding_Date" and "Price"
+      // For COE data, try using "Bidding_Date" first, fallback to "Date" if needed
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv"),
       // For vehicle data, assume the CSV has fields "Year", "Car", "LGV", "HGV", "VHGV"
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv")
     ]).then(([coeData, vehicleData]) => {
+      // Debug: log first row of each CSV to inspect field names
+      console.log("First row of COE data:", coeData[0]);
+      console.log("First row of vehicle data:", vehicleData[0]);
+      
       // Process COE data
       coeData.forEach(d => {
-        // Update field names as per your CSV headers:
-        d.date = parseDate(d.Bidding_Date); // Assuming the field is named "Bidding_Date"
-        d.price = +d.Price;                 // Assuming the field is named "Price"
+        // Try to use "Bidding_Date"; if not available, try "Date"
+        const dateStr = d.Bidding_Date || d.Date;
+        if(dateStr) {
+          d.date = parseDate(dateStr);
+          if (!d.date) {
+            console.error("Date parsing failed for:", dateStr);
+          }
+        } else {
+          console.error("No valid date field found in row:", d);
+        }
+        // Use "Price" or fallback to "price"
+        d.price = +(d.Price || d.price);
       });
       
       // Process vehicle population data
       vehicleData.forEach(d => {
-        d.Year = parseYear(d.Year); // Assuming the field is "Year"
-        // Sum the values for vehicle types; update field names if necessary.
-        d.total = +d.Car + +d.LGV + +d.HGV + +d.VHGV;
+        if(d.Year) {
+          d.Year = parseYear(d.Year);
+        } else {
+          console.error("No Year field in row:", d);
+        }
+        // Sum the values for vehicle types; adjust if headers differ.
+        d.total = +(d.Car) + +(d.LGV) + +(d.HGV) + +(d.VHGV);
       });
       
       // Determine overall x-axis domain from both datasets
@@ -305,6 +297,9 @@
         focus.selectAll(".vehicle-line").style("display", display);
         focus.selectAll(".dot-vehicle").style("display", display);
       });
+      
+    }).catch(error => {
+      console.error("Error loading CSV data:", error);
     });
   </script>
 </body>
