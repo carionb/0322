@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Visualization: COE Prices & Vehicle Population</title>
+  <title>Optimized Interactive Visualization: COE Prices & Vehicle Population</title>
   <script src="https://d3js.org/d3.v6.min.js"></script>
   <style>
     body {
@@ -16,6 +16,10 @@
     .axis line {
       fill: none;
       stroke: #000;
+    }
+    .grid line {
+      stroke: #ccc;
+      stroke-dasharray: 3 3;
     }
     .line {
       fill: none;
@@ -48,7 +52,7 @@
       I hypothesize that there is a positive correlation between COE bidding prices and the overall vehicle population in Singapore. As the vehicle population increases, the demand for vehicle ownership intensifies, which may drive up COE bidding prices. Conversely, periods with a declining vehicle population might correspond with lower COE prices.
     </p>
     <p>
-      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). To explore the hypothesis, I implemented a dual-axis time series chart where COE prices are plotted on the left y-axis and the total vehicle count is displayed on the right y-axis. Interactive features—such as filtering through checkboxes and brushing to select specific time ranges—allow for a more detailed examination of trends and fluctuations.
+      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). The main chart (focus) displays COE prices (left y-axis) and total vehicle count (right y-axis), while the context chart below shows an overview of COE prices for brushing and zooming. Interactive filtering via checkboxes lets users toggle the series.
     </p>
   </div>
   
@@ -63,194 +67,239 @@
   <div class="tooltip" id="tooltip"></div>
   
   <script>
-    const margin = {top: 50, right: 60, bottom: 100, left: 60};
-    const width = 900 - margin.left - margin.right;
-    const height = 500 - margin.top - margin.bottom;
+    // Overall SVG dimensions
+    const svgWidth = 900, svgHeight = 500;
     
-    // Create main SVG group
+    // Margins for focus (main chart) and context (overview chart)
+    const margin = {top: 20, right: 60, bottom: 110, left: 60};
+    const margin2 = {top: svgHeight - 90, right: 60, bottom: 30, left: 60};
+    
+    const focusWidth = svgWidth - margin.left - margin.right;
+    const focusHeight = svgHeight - margin.top - margin.bottom - 60;  // reserve space for context
+    const contextHeight = svgHeight - margin2.top - margin2.bottom;
+    
+    // Create SVG element
     const svg = d3.select("#chart")
-                  .append("g")
-                  .attr("transform", `translate(${margin.left},${margin.top})`);
-                  
-    // Date parsing functions (adjust according to your CSV date formats)
+                  .attr("width", svgWidth)
+                  .attr("height", svgHeight);
+    
+    // Create focus group (main chart)
+    const focus = svg.append("g")
+                     .attr("class", "focus")
+                     .attr("transform", `translate(${margin.left},${margin.top})`);
+    
+    // Create context group (overview chart)
+    const context = svg.append("g")
+                       .attr("class", "context")
+                       .attr("transform", `translate(${margin2.left},${margin2.top})`);
+    
+    // Date parsing functions – adjust format if needed
     const parseDate = d3.timeParse("%Y-%m-%d");
     const parseYear = d3.timeParse("%Y");
     
-    let coeData, vehicleData;
-    
-    // Load both CSV files from GitHub.
-    // Adjust URLs if your branch is not "main" or files are in a different folder.
+    // Load CSV files from GitHub (adjust URLs if necessary)
     Promise.all([
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv"),
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv")
-    ]).then(data => {
-      coeData = data[0];
-      vehicleData = data[1];
-      
-      // Process COE data (assuming CSV fields "date" and "price")
+    ]).then(([coeData, vehicleData]) => {
+      // Process COE data (assumes fields: "date", "price")
       coeData.forEach(d => {
         d.date = parseDate(d.date);
         d.price = +d.price;
       });
       
-      // Process vehicle population data (assuming field "Year" and vehicle types "Car", "LGV", "HGV", "VHGV")
+      // Process vehicle population data (assumes fields: "Year", "Car", "LGV", "HGV", "VHGV")
       vehicleData.forEach(d => {
         d.Year = parseYear(d.Year);
-        // Calculate total vehicle count (adjust if necessary)
         d.total = +d.Car + +d.LGV + +d.HGV + +d.VHGV;
       });
       
-      // Determine the overall x-axis time range from both datasets
+      // Determine overall x-axis domain from both datasets
       const xExtentCoe = d3.extent(coeData, d => d.date);
       const xExtentVehicle = d3.extent(vehicleData, d => d.Year);
-      const xDomain = [d3.min([xExtentCoe[0], xExtentVehicle[0]]),
-                       d3.max([xExtentCoe[1], xExtentVehicle[1]])];
+      const overallXDomain = [d3.min([xExtentCoe[0], xExtentVehicle[0]]),
+                              d3.max([xExtentCoe[1], xExtentVehicle[1]])];
       
-      // Global x-scale (will be updated during brushing)
-      let x = d3.scaleTime().domain(xDomain).range([0, width]);
+      // Define scales for focus chart
+      const x = d3.scaleTime().domain(overallXDomain).range([0, focusWidth]);
+      const y0 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.price)]).nice().range([focusHeight, 0]);
+      const y1 = d3.scaleLinear().domain([0, d3.max(vehicleData, d => d.total)]).nice().range([focusHeight, 0]);
       
-      // y-axis scales
-      const y0 = d3.scaleLinear()
-                   .domain([0, d3.max(coeData, d => d.price)]).nice()
-                   .range([height, 0]);
-      const y1 = d3.scaleLinear()
-                   .domain([0, d3.max(vehicleData, d => d.total)]).nice()
-                   .range([height, 0]);
+      // Define scales for context chart (using COE data only)
+      const x2 = d3.scaleTime().domain(overallXDomain).range([0, focusWidth]);
+      const y2 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.price)]).nice().range([contextHeight, 0]);
       
-      // Add axis groups
-      const xAxisGroup = svg.append("g")
-                            .attr("class", "x axis")
-                            .attr("transform", `translate(0, ${height})`);
-      const yAxisLeftGroup = svg.append("g")
-                                .attr("class", "y axis");
-      const yAxisRightGroup = svg.append("g")
-                                 .attr("class", "y axis")
-                                 .attr("transform", `translate(${width},0)`);
+      // Define axes for focus chart
+      const xAxis = d3.axisBottom(x);
+      const yAxisLeft = d3.axisLeft(y0);
+      const yAxisRight = d3.axisRight(y1);
       
-      // Draw initial axes
-      xAxisGroup.call(d3.axisBottom(x));
-      yAxisLeftGroup.call(d3.axisLeft(y0))
-                    .append("text")
-                    .attr("fill", "steelblue")
-                    .attr("transform", "rotate(-90)")
-                    .attr("y", -50)
-                    .attr("dy", "0.71em")
-                    .attr("text-anchor", "end")
-                    .text("COE Price");
-      yAxisRightGroup.call(d3.axisRight(y1))
-                     .append("text")
-                     .attr("fill", "orange")
-                     .attr("transform", "rotate(-90)")
-                     .attr("y", 40)
-                     .attr("dy", "0.71em")
-                     .attr("text-anchor", "end")
-                     .text("Total Vehicle Count");
+      // Draw focus axes
+      focus.append("g")
+           .attr("class", "x axis")
+           .attr("transform", `translate(0, ${focusHeight})`)
+           .call(xAxis);
       
-      // Line generators
+      focus.append("g")
+           .attr("class", "y axis left")
+           .call(yAxisLeft)
+           .append("text")
+           .attr("fill", "steelblue")
+           .attr("transform", "rotate(-90)")
+           .attr("y", -50)
+           .attr("dy", "0.71em")
+           .attr("text-anchor", "end")
+           .text("COE Price");
+      
+      focus.append("g")
+           .attr("class", "y axis right")
+           .attr("transform", `translate(${focusWidth}, 0)`)
+           .call(yAxisRight)
+           .append("text")
+           .attr("fill", "orange")
+           .attr("transform", "rotate(-90)")
+           .attr("y", 40)
+           .attr("dy", "0.71em")
+           .attr("text-anchor", "end")
+           .text("Total Vehicle Count");
+      
+      // Add gridlines to focus chart
+      function make_x_gridlines() { return d3.axisBottom(x).ticks(5); }
+      function make_y_gridlines() { return d3.axisLeft(y0).ticks(5); }
+      
+      focus.append("g")
+           .attr("class", "grid")
+           .attr("transform", `translate(0, ${focusHeight})`)
+           .call(make_x_gridlines().tickSize(-focusHeight).tickFormat(""));
+      
+      focus.append("g")
+           .attr("class", "grid")
+           .call(make_y_gridlines().tickSize(-focusWidth).tickFormat(""));
+      
+      // Define line generators for focus chart
       const lineCoe = d3.line()
                         .x(d => x(d.date))
                         .y(d => y0(d.price));
+      
       const lineVehicle = d3.line()
                             .x(d => x(d.Year))
                             .y(d => y1(d.total));
       
-      // Draw lines
-      const coePath = svg.append("path")
-                         .datum(coeData)
-                         .attr("class", "line")
-                         .attr("stroke", "steelblue")
-                         .attr("d", lineCoe);
-      const vehiclePath = svg.append("path")
-                             .datum(vehicleData)
-                             .attr("class", "line")
-                             .attr("stroke", "orange")
-                             .attr("d", lineVehicle);
+      // Draw lines in focus chart with transitions
+      const coePath = focus.append("path")
+                           .datum(coeData)
+                           .attr("class", "line coe-line")
+                           .attr("stroke", "steelblue")
+                           .attr("d", lineCoe);
       
-      // Add tooltip functionality
+      const vehiclePath = focus.append("path")
+                               .datum(vehicleData)
+                               .attr("class", "line vehicle-line")
+                               .attr("stroke", "orange")
+                               .attr("d", lineVehicle);
+      
+      // Add tooltip circles for COE and vehicle data
       const tooltip = d3.select("#tooltip");
       
-      // COE data tooltip
-      svg.selectAll(".dot-coe")
-         .data(coeData)
-         .enter()
-         .append("circle")
-         .attr("class", "dot-coe")
-         .attr("cx", d => x(d.date))
-         .attr("cy", d => y0(d.price))
-         .attr("r", 3)
-         .attr("fill", "steelblue")
-         .on("mouseover", (event, d) => {
-           tooltip.transition().duration(200).style("opacity", 0.9);
-           tooltip.html(`Date: ${d3.timeFormat("%Y-%m-%d")(d.date)}<br/>Price: ${d.price}`)
-                  .style("left", (event.pageX + 10) + "px")
-                  .style("top", (event.pageY - 28) + "px");
-         })
-         .on("mouseout", () => {
-           tooltip.transition().duration(500).style("opacity", 0);
-         });
+      focus.selectAll(".dot-coe")
+           .data(coeData)
+           .enter()
+           .append("circle")
+           .attr("class", "dot-coe")
+           .attr("cx", d => x(d.date))
+           .attr("cy", d => y0(d.price))
+           .attr("r", 3)
+           .attr("fill", "steelblue")
+           .on("mouseover", (event, d) => {
+             tooltip.transition().duration(200).style("opacity", 0.9);
+             tooltip.html(`Date: ${d3.timeFormat("%Y-%m-%d")(d.date)}<br/>Price: ${d.price}`)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+           })
+           .on("mouseout", () => {
+             tooltip.transition().duration(500).style("opacity", 0);
+           });
       
-      // Vehicle data tooltip
-      svg.selectAll(".dot-vehicle")
-         .data(vehicleData)
-         .enter()
-         .append("circle")
-         .attr("class", "dot-vehicle")
-         .attr("cx", d => x(d.Year))
-         .attr("cy", d => y1(d.total))
-         .attr("r", 3)
-         .attr("fill", "orange")
-         .on("mouseover", (event, d) => {
-           tooltip.transition().duration(200).style("opacity", 0.9);
-           tooltip.html(`Year: ${d3.timeFormat("%Y")(d.Year)}<br/>Total: ${d.total}`)
-                  .style("left", (event.pageX + 10) + "px")
-                  .style("top", (event.pageY - 28) + "px");
-         })
-         .on("mouseout", () => {
-           tooltip.transition().duration(500).style("opacity", 0);
-         });
+      focus.selectAll(".dot-vehicle")
+           .data(vehicleData)
+           .enter()
+           .append("circle")
+           .attr("class", "dot-vehicle")
+           .attr("cx", d => x(d.Year))
+           .attr("cy", d => y1(d.total))
+           .attr("r", 3)
+           .attr("fill", "orange")
+           .on("mouseover", (event, d) => {
+             tooltip.transition().duration(200).style("opacity", 0.9);
+             tooltip.html(`Year: ${d3.timeFormat("%Y")(d.Year)}<br/>Total: ${d.total}`)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+           })
+           .on("mouseout", () => {
+             tooltip.transition().duration(500).style("opacity", 0);
+           });
       
-      // ---------------------------
-      // Add brushing functionality
-      // ---------------------------
-      // Create a brush in a 40px high area
+      // Draw context chart (overview) using COE data
+      const contextLine = d3.line()
+                            .x(d => x2(d.date))
+                            .y(d => y2(d.price));
+      
+      context.append("path")
+             .datum(coeData)
+             .attr("class", "line context-line")
+             .attr("stroke", "steelblue")
+             .attr("d", contextLine);
+      
+      context.append("g")
+             .attr("class", "x axis")
+             .attr("transform", `translate(0, ${contextHeight})`)
+             .call(d3.axisBottom(x2));
+      
+      // Add brushing to context chart
       const brush = d3.brushX()
-                      .extent([[0, 0], [width, 40]])
+                      .extent([[0, 0], [focusWidth, contextHeight]])
                       .on("brush end", brushed);
       
-      // Append the brush area above the chart
-      const brushGroup = svg.append("g")
-                            .attr("class", "brush")
-                            .attr("transform", `translate(0, ${-50})`)
-                            .call(brush);
+      context.append("g")
+             .attr("class", "brush")
+             .call(brush)
+             .call(brush.move, x.range());
       
       function brushed({selection}) {
         if (selection) {
-          // Convert the pixel selection to a new time domain
-          const newDomain = selection.map(x.invert);
+          const [x0, x1] = selection;
+          const newDomain = [x2.invert(x0), x2.invert(x1)];
           x.domain(newDomain);
-          // Update axes and lines with the new x domain
-          xAxisGroup.call(d3.axisBottom(x));
-          coePath.attr("d", lineCoe);
-          vehiclePath.attr("d", lineVehicle);
-          // Update positions of data points
-          svg.selectAll(".dot-coe").attr("cx", d => x(d.date));
-          svg.selectAll(".dot-vehicle").attr("cx", d => x(d.Year));
+          // Transition focus elements smoothly
+          focus.select(".x.axis").transition().duration(750).call(xAxis);
+          focus.selectAll(".coe-line").transition().duration(750).attr("d", lineCoe);
+          focus.selectAll(".vehicle-line").transition().duration(750).attr("d", lineVehicle);
+          focus.selectAll(".dot-coe").transition().duration(750).attr("cx", d => x(d.date));
+          focus.selectAll(".dot-vehicle").transition().duration(750).attr("cx", d => x(d.Year));
+          // Update gridlines
+          focus.selectAll(".grid").remove();
+          focus.append("g")
+                .attr("class", "grid")
+                .attr("transform", `translate(0, ${focusHeight})`)
+                .call(make_x_gridlines().tickSize(-focusHeight).tickFormat(""));
+          focus.append("g")
+                .attr("class", "grid")
+                .call(make_y_gridlines().tickSize(-focusWidth).tickFormat(""));
         }
       }
       
-      // ---------------------------
-      // Add interactive filtering using checkboxes
-      // ---------------------------
+      // Interactive filtering using checkboxes
       d3.select("#toggleCoe").on("change", function() {
         const display = this.checked ? null : "none";
-        coePath.style("display", display);
-        svg.selectAll(".dot-coe").style("display", display);
+        focus.selectAll(".coe-line").style("display", display);
+        focus.selectAll(".dot-coe").style("display", display);
+        context.selectAll(".context-line").style("display", display);
       });
       
       d3.select("#toggleVehicle").on("change", function() {
         const display = this.checked ? null : "none";
-        vehiclePath.style("display", display);
-        svg.selectAll(".dot-vehicle").style("display", display);
+        focus.selectAll(".vehicle-line").style("display", display);
+        focus.selectAll(".dot-vehicle").style("display", display);
       });
     });
   </script>
