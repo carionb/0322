@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Optimized Interactive Visualization: COE Prices & Vehicle Population</title>
+  <title>Interactive Visualization: COE Premiums & Vehicle Population</title>
   <script src="https://d3js.org/d3.v6.min.js"></script>
   <style>
     body {
@@ -18,8 +18,7 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     h2 { margin-top: 0; }
-    .axis path,
-    .axis line { fill: none; stroke: #000; }
+    .axis path, .axis line { fill: none; stroke: #000; }
     .grid line { stroke: #ccc; stroke-dasharray: 3 3; }
     .line { fill: none; stroke-width: 2px; }
     .tooltip {
@@ -31,13 +30,9 @@
       pointer-events: none;
       opacity: 0;
     }
-    .brush .selection {
-      fill: #777;
-      fill-opacity: 0.3;
-      stroke: #fff;
-    }
+    .brush .selection { fill: #777; fill-opacity: 0.3; stroke: #fff; }
     .checkbox-container { margin-bottom: 10px; }
-    /* 为每个部分加上明显边框 */
+    /* 为各部分添加边框 */
     #description, .checkbox-container, #chart-container {
       border: 1px solid #ddd;
       border-radius: 4px;
@@ -45,60 +40,57 @@
   </style>
 </head>
 <body>
-  <!-- Description Section -->
+  <!-- 描述部分 -->
   <div id="description" class="container">
     <h2>Hypothesis and Data Description</h2>
     <p>
-      I hypothesize that there is a positive correlation between COE bidding prices and the overall vehicle population in Singapore. As the vehicle population increases, the demand for vehicle ownership intensifies, which may drive up COE bidding prices. Conversely, periods with a declining vehicle population might correspond with lower COE prices.
+      I hypothesize that there is a positive correlation between COE premiums and the overall vehicle population in Singapore. As the vehicle population increases, the demand for vehicles intensifies, which may drive up COE premiums. Conversely, periods with a declining vehicle population might correspond with lower premiums.
     </p>
     <p>
-      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). The main chart displays COE prices (left y-axis) and aggregated total vehicle count (right y-axis). Interactive filtering via checkboxes lets users toggle the series.
+      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). The main chart displays COE premiums (left y-axis) and aggregated total vehicle count (right y-axis). Interactive filtering via checkboxes lets users toggle the series.
     </p>
   </div>
   
-  <!-- Filtering Section -->
+  <!-- 过滤选项 -->
   <div class="container checkbox-container">
-    <label><input type="checkbox" id="toggleCoe" checked> Show COE Bidding Prices</label>
+    <label><input type="checkbox" id="toggleCoe" checked> Show COE Premiums</label>
     <label style="margin-left: 20px;"><input type="checkbox" id="toggleVehicle" checked> Show Total Vehicle Count</label>
   </div>
   
-  <!-- Chart Section -->
+  <!-- 图表部分 -->
   <div id="chart-container" class="container">
     <svg id="chart" width="900" height="500"></svg>
     <div class="tooltip" id="tooltip"></div>
   </div>
   
   <script>
-    // Overall SVG dimensions
+    // SVG整体尺寸及focus/context区间
     const svgWidth = 900, svgHeight = 500;
-    // Margins for focus (main chart) and context (overview chart)
     const margin = {top: 20, right: 60, bottom: 110, left: 60};
     const margin2 = {top: svgHeight - 90, right: 60, bottom: 30, left: 60};
-    
     const focusWidth = svgWidth - margin.left - margin.right;
-    const focusHeight = svgHeight - margin.top - margin.bottom - 60;  // reserve space for context
+    const focusHeight = svgHeight - margin.top - margin.bottom - 60; // 留出 context 区域
     const contextHeight = svgHeight - margin2.top - margin2.bottom;
     
-    // Create SVG element
+    // 创建SVG
     const svg = d3.select("#chart")
                   .attr("width", svgWidth)
                   .attr("height", svgHeight);
     
-    // Create focus group (main chart)
+    // 创建focus组（主图）和context组（概览图）
     const focus = svg.append("g")
                      .attr("class", "focus")
                      .attr("transform", `translate(${margin.left},${margin.top})`);
-    
-    // Create context group (overview chart)
     const context = svg.append("g")
                        .attr("class", "context")
                        .attr("transform", `translate(${margin2.left},${margin2.top})`);
     
-    // Date parsing functions – adjust format if needed
-    const parseDate = d3.timeParse("%Y-%m-%d");
-    const parseYear = d3.timeParse("%Y");
+    // 日期解析函数
+    const parseDate = d3.timeParse("%Y-%m-%d"); // 用于COE数据，如果需要可调整
+    const parseMonth = d3.timeParse("%Y-%m");     // COE数据中Month字段格式：YYYY-MM
+    const parseYear = d3.timeParse("%Y");          // 用于车辆数据年份
     
-    // 清理每一行数据，去除键和值多余的空白
+    // 清理行数据：trim键和值
     function cleanRow(row) {
       const newRow = {};
       Object.keys(row).forEach(key => {
@@ -108,65 +100,70 @@
       return newRow;
     }
     
-    // 加载 CSV 文件并预处理
+    // 加载 CSV 数据，使用GitHub raw链接（确保仓库公开且路径正确）
     Promise.all([
-      // COE 数据（假设字段为 "Bidding_Date" 和 "Price"，也支持备用 "Date" 和 "price"）
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv", cleanRow),
-      // 车辆数据（假设字段为 "year", "category", "type", "number", "total"）
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv", cleanRow)
     ]).then(([coeData, vehicleData]) => {
       console.log("First row of COE data:", coeData[0]);
       console.log("First row of vehicle data:", vehicleData[0]);
       
-      // 处理 COE 数据
+      // 处理 COE 数据：解析 Month 字段，转换 Premium 为数字（去除逗号）
       coeData.forEach(d => {
-        // 使用 "Bidding_Date" 或 "Date"
-        const dateStr = d.Bidding_Date || d.Date;
-        if(dateStr) {
-          d.date = parseDate(dateStr);
-          if (!d.date) {
-            console.error("Date parsing failed for:", dateStr);
+        // 使用 Month 字段，格式为 "YYYY-MM"
+        if(d.Month) {
+          d.date = parseMonth(d.Month);
+          if(!d.date) {
+            console.error("Date parsing failed for Month:", d.Month);
           }
         } else {
-          console.error("No valid date field found in row:", d);
+          console.error("No Month field in row:", d);
         }
-        d.price = +(d.Price || d.price);
+        // Premium字段转换为数值（去除逗号，如有）
+        if(d.Premium) {
+          d.premium = +d.Premium.replace(/,/g, "");
+        } else {
+          d.premium = NaN;
+        }
       });
       
-      // 处理车辆数据
-      // 首先将每行的 "year" 和 "number" 转换为合适的格式
+      // 处理车辆数据：使用 "Year" 和 "No. of Vehicles"
+      // 注意：CSV字段名为 "Year", "Category", "Type", "No. of Vehicles"
       vehicleData.forEach(d => {
-        // 此处字段名为小写 "year"、"number"
-        d.year = d.year ? d.year.trim() : "";
-        d.number = +d.number; // 转换为数字
+        if(d.Year) {
+          d.year = parseYear(d.Year);
+        } else {
+          console.error("No Year field in row:", d);
+        }
+        // 将 "No. of Vehicles" 转为数字（去除可能的逗号）
+        d.num = d["No. of Vehicles"] ? +d["No. of Vehicles"].replace(/,/g, "") : 0;
       });
       
-      // 按年聚合车辆数量（求和）
+      // 按年份聚合车辆总量（忽略Category和Type）
       const aggregatedVehicleData = Array.from(
-        d3.rollup(vehicleData, v => d3.sum(v, d => d.number), d => d.year),
+        d3.rollup(vehicleData, v => d3.sum(v, d => d.num), d => d.Year),
         ([year, total]) => ({ year: parseYear(year), total })
       );
       
-      // 调试输出聚合后的数据
       console.log("Aggregated vehicle data:", aggregatedVehicleData);
       
-      // 确定 x 轴范围：取 COE 和车辆数据的最小/最大日期
+      // 确定 x轴范围：取 COE 和车辆数据的最小/最大日期
       const xExtentCoe = d3.extent(coeData, d => d.date);
       const xExtentVehicle = d3.extent(aggregatedVehicleData, d => d.year);
       const overallXDomain = [d3.min([xExtentCoe[0], xExtentVehicle[0]]),
                               d3.max([xExtentCoe[1], xExtentVehicle[1]])];
       
       // 定义 focus 图的比例尺
-      const x = d3.scaleTime().domain(overallXDomain).range([0, focusWidth]);
-      const y0 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.price)]).nice().range([focusHeight, 0]);
+      const xScale = d3.scaleTime().domain(overallXDomain).range([0, focusWidth]);
+      const y0 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.premium)]).nice().range([focusHeight, 0]);
       const y1 = d3.scaleLinear().domain([0, d3.max(aggregatedVehicleData, d => d.total)]).nice().range([focusHeight, 0]);
       
       // 定义 context 图的比例尺（仅使用 COE 数据）
       const x2 = d3.scaleTime().domain(overallXDomain).range([0, focusWidth]);
-      const y2 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.price)]).nice().range([contextHeight, 0]);
+      const y2 = d3.scaleLinear().domain([0, d3.max(coeData, d => d.premium)]).nice().range([contextHeight, 0]);
       
-      // 定义 focus 图的坐标轴
-      const xAxis = d3.axisBottom(x);
+      // 定义坐标轴
+      const xAxis = d3.axisBottom(xScale);
       const yAxisLeft = d3.axisLeft(y0);
       const yAxisRight = d3.axisRight(y1);
       
@@ -175,7 +172,6 @@
            .attr("class", "x axis")
            .attr("transform", `translate(0, ${focusHeight})`)
            .call(xAxis);
-      
       focus.append("g")
            .attr("class", "y axis left")
            .call(yAxisLeft)
@@ -185,11 +181,10 @@
            .attr("y", -50)
            .attr("dy", "0.71em")
            .attr("text-anchor", "end")
-           .text("COE Price");
-      
+           .text("COE Premium");
       focus.append("g")
            .attr("class", "y axis right")
-           .attr("transform", `translate(${focusWidth}, 0)`)
+           .attr("transform", `translate(${focusWidth},0)`)
            .call(yAxisRight)
            .append("text")
            .attr("fill", "orange")
@@ -197,73 +192,66 @@
            .attr("y", 40)
            .attr("dy", "0.71em")
            .attr("text-anchor", "end")
-           .text("Total Vehicle Count");
+           .text("Total Vehicles");
       
-      // 添加 focus 图背景网格线
-      function make_x_gridlines() { return d3.axisBottom(x).ticks(5); }
+      // 添加网格线
+      function make_x_gridlines() { return d3.axisBottom(xScale).ticks(5); }
       function make_y_gridlines() { return d3.axisLeft(y0).ticks(5); }
-      
       focus.append("g")
            .attr("class", "grid")
            .attr("transform", `translate(0, ${focusHeight})`)
            .call(make_x_gridlines().tickSize(-focusHeight).tickFormat(""));
-      
       focus.append("g")
            .attr("class", "grid")
            .call(make_y_gridlines().tickSize(-focusWidth).tickFormat(""));
       
-      // 定义 focus 图折线生成器
+      // 定义折线生成器
       const lineCoe = d3.line()
-                        .x(d => x(d.date))
-                        .y(d => y0(d.price));
-      
+                        .x(d => xScale(d.date))
+                        .y(d => y0(d.premium));
       const lineVehicle = d3.line()
-                            .x(d => x(d.year))
+                            .x(d => xScale(d.year))
                             .y(d => y1(d.total));
       
-      // 绘制 COE 价格折线
+      // 绘制折线
       const coePath = focus.append("path")
                            .datum(coeData)
                            .attr("class", "line coe-line")
                            .attr("stroke", "steelblue")
                            .attr("d", lineCoe);
-      
-      // 绘制车辆总量折线（使用聚合后的数据）
       const vehiclePath = focus.append("path")
                                .datum(aggregatedVehicleData)
                                .attr("class", "line vehicle-line")
                                .attr("stroke", "orange")
                                .attr("d", lineVehicle);
       
-      // 添加 tooltip 圆点（COE 数据）
+      // 添加 tooltip（COE数据）
       const tooltip = d3.select("#tooltip");
-      
       focus.selectAll(".dot-coe")
            .data(coeData)
            .enter()
            .append("circle")
            .attr("class", "dot-coe")
-           .attr("cx", d => x(d.date))
-           .attr("cy", d => y0(d.price))
+           .attr("cx", d => xScale(d.date))
+           .attr("cy", d => y0(d.premium))
            .attr("r", 3)
            .attr("fill", "steelblue")
            .on("mouseover", (event, d) => {
              tooltip.transition().duration(200).style("opacity", 0.9);
-             tooltip.html(`Date: ${d3.timeFormat("%Y-%m-%d")(d.date)}<br/>Price: ${d.price}`)
+             tooltip.html(`Date: ${d3.timeFormat("%Y-%m")(d.date)}<br/>Premium: ${d.premium}`)
                     .style("left", (event.pageX + 10) + "px")
                     .style("top", (event.pageY - 28) + "px");
            })
            .on("mouseout", () => {
              tooltip.transition().duration(500).style("opacity", 0);
            });
-      
-      // 添加 tooltip 圆点（车辆总量数据）
+      // 添加 tooltip（车辆数据）
       focus.selectAll(".dot-vehicle")
            .data(aggregatedVehicleData)
            .enter()
            .append("circle")
            .attr("class", "dot-vehicle")
-           .attr("cx", d => x(d.year))
+           .attr("cx", d => xScale(d.year))
            .attr("cy", d => y1(d.total))
            .attr("r", 3)
            .attr("fill", "orange")
@@ -277,43 +265,40 @@
              tooltip.transition().duration(500).style("opacity", 0);
            });
       
-      // 绘制 context 图（概览），使用 COE 数据
+      // 绘制 context 图（概览图，使用 COE 数据）
       const contextLine = d3.line()
                             .x(d => x2(d.date))
-                            .y(d => y2(d.price));
-      
+                            .y(d => y2(d.premium));
       context.append("path")
              .datum(coeData)
              .attr("class", "line context-line")
              .attr("stroke", "steelblue")
              .attr("d", contextLine);
-      
       context.append("g")
              .attr("class", "x axis")
              .attr("transform", `translate(0, ${contextHeight})`)
              .call(d3.axisBottom(x2));
       
-      // 添加 context 图刷选功能
+      // 添加 context 图刷选
       const brush = d3.brushX()
                       .extent([[0, 0], [focusWidth, contextHeight]])
                       .on("brush end", brushed);
-      
       context.append("g")
              .attr("class", "brush")
              .call(brush)
-             .call(brush.move, x.range());
+             .call(brush.move, xScale.range());
       
       function brushed({selection}) {
         if (selection) {
           const [x0, x1] = selection;
           const newDomain = [x2.invert(x0), x2.invert(x1)];
-          x.domain(newDomain);
-          // 平滑更新 focus 图所有元素
+          xScale.domain(newDomain);
+          // 平滑过渡更新所有focus图元素
           focus.select(".x.axis").transition().duration(750).call(xAxis);
           focus.selectAll(".coe-line").transition().duration(750).attr("d", lineCoe);
           focus.selectAll(".vehicle-line").transition().duration(750).attr("d", lineVehicle);
-          focus.selectAll(".dot-coe").transition().duration(750).attr("cx", d => x(d.date));
-          focus.selectAll(".dot-vehicle").transition().duration(750).attr("cx", d => x(d.year));
+          focus.selectAll(".dot-coe").transition().duration(750).attr("cx", d => xScale(d.date));
+          focus.selectAll(".dot-vehicle").transition().duration(750).attr("cx", d => xScale(d.year));
           // 更新网格线
           focus.selectAll(".grid").remove();
           focus.append("g")
@@ -326,14 +311,13 @@
         }
       }
       
-      // 交互过滤：复选框控制各系列显示
+      // 复选框过滤交互
       d3.select("#toggleCoe").on("change", function() {
         const display = this.checked ? null : "none";
         focus.selectAll(".coe-line").style("display", display);
         focus.selectAll(".dot-coe").style("display", display);
         context.selectAll(".context-line").style("display", display);
       });
-      
       d3.select("#toggleVehicle").on("change", function() {
         const display = this.checked ? null : "none";
         focus.selectAll(".vehicle-line").style("display", display);
