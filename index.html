@@ -18,55 +18,39 @@
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     h2 { margin-top: 0; }
-    .axis path, .axis line { fill: none; stroke: #000; }
-
-    .checkbox-container { margin-bottom: 10px; }
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000;
+    }
+    .grid line {
+      stroke: #ccc;
+      stroke-dasharray: 3 3;
+    }
+    .line {
+      fill: none;
+      stroke-width: 2px;
+    }
+    .tooltip {
+      position: absolute;
+      background: lightsteelblue;
+      padding: 5px;
+      border: 1px solid #000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .checkbox-container {
+      margin-bottom: 10px;
+    }
     /* 为各部分添加边框 */
     #description, .checkbox-container, #chart-container {
       border: 1px solid #ddd;
       border-radius: 4px;
     }
-
-    .line {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.tooltip {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  pointer-events: none;
-  transition: opacity 0.2s;
-  padding: 12px;
-  font-size: 14px;
-}
-
-.tooltip-header {
-  font-weight: bold;
-  margin-bottom: 8px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 4px;
-}
-
-.legend rect {
-  stroke: #666;
-  stroke-width: 0.5;
-}
-
-.focus-line {
-  stroke-width: 1px;
-}
-
-.grid line {
-  stroke: #eee;
-}
-
-.axis text {
-  font-size: 12px;
-  fill: #666;
-}
+    .legend {
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -78,9 +62,9 @@
     </p>
     <p>
       The analysis uses two datasets:
-      <strong>COE Bidding Results / Prices</strong> (with month from Jan-10 to Mar-25, premium values)
-      and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (with year from 2005 to 2025, vehicle numbers).
-      The chart shows a dual-axis time series with the left y-axis representing COE Premiums and the right y-axis representing the aggregated total vehicles per year.
+      <strong>COE Bidding Results / Prices</strong> (from Jan-10 to Mar-25, premium values)
+      and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from 2005 to 2025, vehicle numbers).
+      The chart displays a dual-axis time series with the left y-axis representing COE Premiums and the right y-axis representing the aggregated total vehicles per year.
     </p>
   </div>
   
@@ -92,38 +76,36 @@
   
   <!-- 图表部分 -->
   <div id="chart-container" class="container">
-    <svg id="chart" width="900" height="500"></svg>
+    <svg id="chart" viewBox="0 0 900 500" preserveAspectRatio="xMidYMid meet"></svg>
     <div class="tooltip" id="tooltip"></div>
   </div>
   
   <script>
-    // SVG 尺寸与边距
+    // 定义 SVG 尺寸与边距
     const svgWidth = 900, svgHeight = 500;
-    const margin = {top: 20, right: 60, bottom: 40, left: 60};
+    const margin = { top: 20, right: 60, bottom: 40, left: 60 };
     const chartWidth = svgWidth - margin.left - margin.right;
     const chartHeight = svgHeight - margin.top - margin.bottom;
     
-    // 创建 SVG 元素
-    const svg = d3.select("#chart")
-                  .attr("width", svgWidth)
-                  .attr("height", svgHeight);
+    // 创建 SVG 元素及图表分组
+    const svg = d3.select("#chart");
     const chartGroup = svg.append("g")
                           .attr("transform", `translate(${margin.left},${margin.top})`);
     
     // 定义日期解析函数
-    const parseCoeDate = d3.timeParse("%Y-%m");  // 例如 "Jan-10" 会被解析为 2010-01-01
+    const parseCoeDate = d3.timeParse("%Y-%m");
     const parseVehicleYear = d3.timeParse("%Y");
     
-    // 清理行数据，去除键和值的多余空白
-    function cleanRow(row) {
+    // 清理 CSV 数据中的多余空白
+    const cleanRow = row => {
       const newRow = {};
       for (const key in row) {
         newRow[key.trim()] = typeof row[key] === "string" ? row[key].trim() : row[key];
       }
       return newRow;
-    }
+    };
     
-    // CSV 文件的 URL（请根据实际情况检查路径）
+    // CSV 数据源 URL
     const coeURL = "https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv";
     const vehicleURL = "https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv";
     
@@ -132,180 +114,202 @@
       d3.csv(coeURL, cleanRow),
       d3.csv(vehicleURL, cleanRow)
     ]).then(([coeData, vehicleData]) => {
-      console.log("First row of COE data:", coeData[0]);
-      console.log("First row of Vehicle data:", vehicleData[0]);
-      
-      // 处理 COE 数据：解析 month 字段，转换 premium 数值
+      // 处理 COE 数据：解析日期并转换 premium 为数字
       coeData.forEach(d => {
-        if (d.month) {
-          // 为了保证解析正确，添加“-01”构造完整日期字符串（如 "Jan-10-01"），解析格式依然使用 "%Y-%m"
-          // 注意：d3.timeParse("%Y-%m") 只需要前 7 个字符即可，所以直接解析 d.month 也行
-          d.date = parseCoeDate(d.month);
-          if (!d.date) {
-            console.error("Date parsing failed for month:", d.month);
-          }
-        } else {
-          console.error("No 'month' field in row:", d);
-        }
-        // 将 premium 转为数值，去除逗号
-        if (d.premium) {
-          d.premium = +d.premium.replace(/,/g, "");
-        } else {
-          d.premium = NaN;
-        }
+        d.date = d.month ? parseCoeDate(d.month) : null;
+        if (!d.date) console.error("日期解析失败：", d.month);
+        d.premium = d.premium ? +d.premium.replace(/,/g, "") : NaN;
       });
       
-      // 处理车辆数据：使用 "year" 和 "number"
+      // 处理车辆数据：解析年份并转换 number 为数字
       vehicleData.forEach(d => {
-        if (d.year) {
-          d.yearParsed = parseVehicleYear(d.year);
-        } else {
-          console.error("No 'year' field in row:", d);
-        }
-        // 将 "number" 转换为数字（去除逗号，如果有）
+        d.yearParsed = d.year ? parseVehicleYear(d.year) : null;
         d.number = d.number ? +d.number.replace(/,/g, "") : 0;
       });
       
-      // 按年份聚合车辆数据（忽略 category 与 type）
+      // 按年份聚合车辆数据（忽略 category/type 维度）
       const aggregatedVehicleData = Array.from(
-  d3.rollup(vehicleData, v => d3.sum(v, d => d.number), d => d.year
-).map(([year, total]) => ({
-  year: parseVehicleYear(year),
-  // 生成每月数据点（平滑过渡）
-  monthlyData: Array.from({length: 12}, (_, i) => ({
-    date: new Date(year, i, 1),
-    total: total
-  }))
-})).flatMap(d => d.monthlyData);
-
-// 调整X轴时间范围
-const xExtent = d3.extent([...coeData, ...aggregatedVehicleData].map(d => d.date));
-const xScale = d3.scaleTime().domain(xExtent).range([0, chartWidth]).nice();
-
-// 使用对数比例优化Y轴显示（假设数据范围差异大）
-const yLeft = d3.scaleLog()
-                .domain([1, d3.max(coeData, d => d.premium)])
-                .range([chartHeight, 20]) // 保留顶部间距
-                .nice();
-
-const yRight = d3.scaleLinear()
-                 .domain([0, d3.max(aggregatedVehicleData, d => d.total)])
-                 .range([chartHeight, 20])
-                 .nice();
-
-// 增强折线样式
-const lineCOE = d3.line()
-  .x(d => xScale(d.date))
-  .y(d => yLeft(d.premium))
-  .curve(d3.curveMonotoneX); // 添加平滑曲线
-
-const lineVehicle = d3.line()
-  .x(d => xScale(d.date))
-  .y(d => yRight(d.total))
-  .curve(d3.curveMonotoneX);
-
-// 添加渐变效果
-const gradient = chartGroup.append("linearGradient")
-  .attr("id", "coe-gradient")
-  .attr("gradientUnits", "userSpaceOnUse")
-  .attr("x1", 0).attr("y1", chartHeight)
-  .attr("x2", 0).attr("y2", 0);
-
-gradient.selectAll("stop")
-  .data([{offset: "0%", color: "steelblue"}, {offset: "100%", color: "lightsteelblue"}])
-  .enter().append("stop")
-  .attr("offset", d => d.offset)
-  .attr("stop-color", d => d.color);
-
-// 绘制带填充的COE折线
-chartGroup.append("path")
-  .datum(coeData)
-  .attr("class", "line coe-line")
-  .style("stroke", "url(#coe-gradient)")
-  .style("stroke-width", 3)
-  .style("fill", "none")
-  .attr("d", lineCOE);
-
-// 添加动态焦点线
-const focusLine = chartGroup.append("line")
-  .attr("class", "focus-line")
-  .style("stroke", "#666")
-  .style("stroke-dasharray", "3 3")
-  .style("opacity", 0);
-
-// 优化提示框交互
-chartGroup.append("rect")
-  .attr("class", "overlay")
-  .attr("width", chartWidth)
-  .attr("height", chartHeight)
-  .style("opacity", 0)
-  .on("mousemove", function(event) {
-    const mouseX = d3.pointer(event, this)[0];
-    const bisect = d3.bisector(d => d.date).left;
-    const x0 = xScale.invert(mouseX);
-    
-    // COE数据提示
-    const coeIndex = bisect(coeData, x0, 1);
-    const coeD = coeData[coeIndex];
-    
-    // 车辆数据提示
-    const vehicleIndex = bisect(aggregatedVehicleData, x0, 1);
-    const vehicleD = aggregatedVehicleData[vehicleIndex];
-
-    focusLine.attr("x1", mouseX).attr("x2", mouseX)
-      .attr("y1", 0).attr("y2", chartHeight)
-      .style("opacity", 1);
-
-    tooltip.html(`
-      <div class="tooltip-header">${d3.timeFormat("%B %Y")(x0)}</div>
-      <div style="color:steelblue">COE: $${coeD?.premium || 'N/A'}</div>
-      <div style="color:orange">Vehicles: ${vehicleD?.total?.toLocaleString() || 'N/A'}</div>
-    `).style("transform", `translate(${mouseX + 30}px, ${chartHeight/2}px)`);
-  })
-  .on("mouseout", () => {
-    focusLine.style("opacity", 0);
-    tooltip.style("opacity", 0);
-  });
-
-// 添加图例
-const legend = chartGroup.append("g")
-  .attr("class", "legend")
-  .attr("transform", `translate(${chartWidth - 180}, 20)`);
-
-legend.append("rect").attr("width", 18).attr("height", 18)
-  .style("fill", "steelblue");
-legend.append("text").attr("x", 24).attr("y", 9).attr("dy", ".35em")
-  .text("COE Premiums");
-
-legend.append("rect").attr("y", 20).attr("width", 18).attr("height", 18)
-  .style("fill", "orange");
-legend.append("text").attr("x", 24).attr("y", 29).attr("dy", ".35em")
-  .text("Vehicle Population");
-
-// 添加缩放功能
-const zoom = d3.zoom()
-  .scaleExtent([1, 8])
-  .on("zoom", ({transform}) => {
-    const newX = transform.rescaleX(xScale);
-    chartGroup.selectAll(".line").attr("d", d => {
-      if(d === coeData) return lineCOE.x(d => newX(d.date));
-      return lineVehicle.x(d => newX(d.date));
-    });
-    chartGroup.select(".x.axis").call(xAxis.scale(newX));
-  });
-
-svg.call(zoom);
+        d3.rollup(vehicleData, v => d3.sum(v, d => d.number), d => d.year),
+        ([year, total]) => ({ year: parseVehicleYear(year), total })
+      ).sort((a, b) => a.year - b.year);
+      
+      // 定义 x 轴范围：结合两个数据集的最小、最大日期
+      const xMin = d3.min([d3.min(coeData, d => d.date), d3.min(aggregatedVehicleData, d => d.year)]);
+      const xMax = d3.max([d3.max(coeData, d => d.date), d3.max(aggregatedVehicleData, d => d.year)]);
+      const xScale = d3.scaleTime().domain([xMin, xMax]).range([0, chartWidth]);
+      
+      // 定义左右 y 轴比例尺
+      const yLeft = d3.scaleLinear()
+                      .domain([0, d3.max(coeData, d => d.premium)]).nice()
+                      .range([chartHeight, 0]);
+      const yRight = d3.scaleLinear()
+                       .domain([0, d3.max(aggregatedVehicleData, d => d.total)]).nice()
+                       .range([chartHeight, 0]);
+      
+      // 添加 x 轴
+      const xAxis = d3.axisBottom(xScale);
+      chartGroup.append("g")
+                .attr("class", "x axis")
+                .attr("transform", `translate(0, ${chartHeight})`)
+                .call(xAxis);
+      
+      // 添加左侧 y 轴（COE Premium）
+      const yAxisLeft = d3.axisLeft(yLeft).tickFormat(d => `$${d}`);
+      chartGroup.append("g")
+                .attr("class", "y axis left")
+                .call(yAxisLeft)
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", -50)
+                .attr("dy", "0.71em")
+                .attr("text-anchor", "end")
+                .attr("fill", "steelblue")
+                .text("COE Premium");
+      
+      // 添加右侧 y 轴（Total Vehicles）
+      const yAxisRight = d3.axisRight(yRight);
+      chartGroup.append("g")
+                .attr("class", "y axis right")
+                .attr("transform", `translate(${chartWidth}, 0)`)
+                .call(yAxisRight)
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 40)
+                .attr("dy", "0.71em")
+                .attr("text-anchor", "end")
+                .attr("fill", "orange")
+                .text("Total Vehicles");
+      
+      // 添加网格线（x、y 轴）
+      const xGrid = d3.axisBottom(xScale).ticks(5);
+      chartGroup.append("g")
+                .attr("class", "grid x-grid")
+                .attr("transform", `translate(0, ${chartHeight})`)
+                .call(xGrid.tickSize(-chartHeight).tickFormat(""));
+      
+      const yGrid = d3.axisLeft(yLeft).ticks(5);
+      chartGroup.append("g")
+                .attr("class", "grid y-grid")
+                .call(yGrid.tickSize(-chartWidth).tickFormat(""));
+      
+      // 定义折线生成器
+      const lineCOE = d3.line()
+                        .x(d => xScale(d.date))
+                        .y(d => yLeft(d.premium));
+      const lineVehicle = d3.line()
+                            .x(d => xScale(d.year))
+                            .y(d => yRight(d.total));
+      
+      // 绘制 COE 折线
+      chartGroup.append("path")
+                .datum(coeData)
+                .attr("class", "line coe-line")
+                .attr("stroke", "steelblue")
+                .attr("d", lineCOE);
+      
+      // 绘制车辆总数折线
+      chartGroup.append("path")
+                .datum(aggregatedVehicleData)
+                .attr("class", "line vehicle-line")
+                .attr("stroke", "orange")
+                .attr("d", lineVehicle);
+      
+      // tooltip 元素
+      const tooltip = d3.select("#tooltip");
+      
+      // tooltip 处理函数
+      const handleMouseOver = (event, d, label, value) => {
+        tooltip.transition().duration(200).style("opacity", 0.9);
+        tooltip.html(`${label}: ${value}`)
+               .style("left", `${event.pageX + 10}px`)
+               .style("top", `${event.pageY - 28}px`);
+      };
+      
+      // 添加 COE 数据点与 tooltip
+      chartGroup.selectAll(".dot-coe")
+                .data(coeData)
+                .enter()
+                .append("circle")
+                .attr("class", "dot-coe")
+                .attr("cx", d => xScale(d.date))
+                .attr("cy", d => yLeft(d.premium))
+                .attr("r", 3)
+                .attr("fill", "steelblue")
+                .on("mouseover", (event, d) => {
+                  handleMouseOver(
+                    event, 
+                    d, 
+                    "Month", 
+                    `${d3.timeFormat("%b %Y")(d.date)}<br/>Premium: $${d.premium}`
+                  );
+                })
+                .on("mouseout", () => {
+                  tooltip.transition().duration(500).style("opacity", 0);
+                });
+      
+      // 添加车辆数据点与 tooltip
+      chartGroup.selectAll(".dot-vehicle")
+                .data(aggregatedVehicleData)
+                .enter()
+                .append("circle")
+                .attr("class", "dot-vehicle")
+                .attr("cx", d => xScale(d.year))
+                .attr("cy", d => yRight(d.total))
+                .attr("r", 3)
+                .attr("fill", "orange")
+                .on("mouseover", (event, d) => {
+                  handleMouseOver(
+                    event, 
+                    d, 
+                    "Year", 
+                    `${d3.timeFormat("%Y")(d.year)}<br/>Total: ${d.total}`
+                  );
+                })
+                .on("mouseout", () => {
+                  tooltip.transition().duration(500).style("opacity", 0);
+                });
       
       // 复选框交互：切换系列显示
       d3.select("#toggleCoe").on("change", function() {
-        const display = this.checked ? "visible" : "hidden";
-        chartGroup.selectAll(".coe-line, .dot-coe").style("visibility", display);
+        const visibility = this.checked ? "visible" : "hidden";
+        chartGroup.selectAll(".coe-line, .dot-coe").style("visibility", visibility);
       });
       
       d3.select("#toggleVehicle").on("change", function() {
-        const display = this.checked ? "visible" : "hidden";
-        chartGroup.selectAll(".vehicle-line, .dot-vehicle").style("visibility", display);
+        const visibility = this.checked ? "visible" : "hidden";
+        chartGroup.selectAll(".vehicle-line, .dot-vehicle").style("visibility", visibility);
       });
+      
+      // 添加图例，帮助区分折线
+      const legend = svg.append("g")
+                        .attr("class", "legend")
+                        .attr("transform", `translate(${margin.left}, ${margin.top})`);
+      
+      legend.append("circle")
+            .attr("cx", chartWidth - 120)
+            .attr("cy", 10)
+            .attr("r", 6)
+            .style("fill", "steelblue");
+      
+      legend.append("text")
+            .attr("x", chartWidth - 105)
+            .attr("y", 15)
+            .text("COE Premiums")
+            .style("font-size", "12px")
+            .attr("alignment-baseline", "middle");
+      
+      legend.append("circle")
+            .attr("cx", chartWidth - 120)
+            .attr("cy", 30)
+            .attr("r", 6)
+            .style("fill", "orange");
+      
+      legend.append("text")
+            .attr("x", chartWidth - 105)
+            .attr("y", 35)
+            .text("Total Vehicles")
+            .style("font-size", "12px")
+            .attr("alignment-baseline", "middle");
       
     }).catch(error => {
       console.error("Error loading CSV data:", error);
