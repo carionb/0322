@@ -44,10 +44,10 @@ Promise.all([
     const parseCoeDate = d3.timeParse("%y-%b");
     
     const processedCoe = coeData.map(d => ({
-        date: parseCoeDate(d.Month),
-        category: d["Vehicle Class"].trim(),
-        premium: +d.Premium
-    })).filter(d => d.date);
+    date: parseCoeDate(d.month),
+    category: d.vehicle_class ? d.vehicle_class.trim() : "",
+    premium: +d.premium
+})).filter(d => d.date);
 
     const processedVehicle = vehicleData.map(d => ({
         date: new Date(+d.year, 0, 1),
