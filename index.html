@@ -99,18 +99,22 @@
     
     // Load CSV files from GitHub (adjust URLs if necessary)
     Promise.all([
+      // For COE data, assume the CSV has fields "Bidding_Date" and "Price"
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv"),
+      // For vehicle data, assume the CSV has fields "Year", "Car", "LGV", "HGV", "VHGV"
       d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv")
     ]).then(([coeData, vehicleData]) => {
-      // Process COE data (assumes fields: "date", "price")
+      // Process COE data
       coeData.forEach(d => {
-        d.date = parseDate(d.date);
-        d.price = +d.price;
+        // Update field names as per your CSV headers:
+        d.date = parseDate(d.Bidding_Date); // Assuming the field is named "Bidding_Date"
+        d.price = +d.Price;                 // Assuming the field is named "Price"
       });
       
-      // Process vehicle population data (assumes fields: "Year", "Car", "LGV", "HGV", "VHGV")
+      // Process vehicle population data
       vehicleData.forEach(d => {
-        d.Year = parseYear(d.Year);
+        d.Year = parseYear(d.Year); // Assuming the field is "Year"
+        // Sum the values for vehicle types; update field names if necessary.
         d.total = +d.Car + +d.LGV + +d.HGV + +d.VHGV;
       });
       
@@ -276,7 +280,7 @@
           focus.selectAll(".vehicle-line").transition().duration(750).attr("d", lineVehicle);
           focus.selectAll(".dot-coe").transition().duration(750).attr("cx", d => x(d.date));
           focus.selectAll(".dot-vehicle").transition().duration(750).attr("cx", d => x(d.Year));
-          // Update gridlines
+          // Update gridlines: remove and re-add for updated x-scale
           focus.selectAll(".grid").remove();
           focus.append("g")
                 .attr("class", "grid")
