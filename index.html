@@ -131,12 +131,12 @@
     .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
 
   // 定义日期解析函数
-  // COE 数据中 Month 字段格式为 "10-Jan" (两位年份-月份缩写)
+  // COE 数据中 Month 字段格式为 "10-Jan"（即两位年份-月份缩写）
   const parseCoeDate = d3.timeParse("%y-%b");
   // 车辆数据中 year 字段格式为 "2005"
   const parseVehicleYear = d3.timeParse("%Y");
 
-  // CSV 文件 URL —— 请确保路径正确（GitHub raw 链接）
+  // CSV 文件的 URL —— 请确保路径正确（GitHub raw 链接）
   const coeURL = "https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv";
   const vehicleURL = "https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv";
 
@@ -157,13 +157,13 @@
 
     // 处理车辆数据：字段 "year", "category", "type", "number"
     const processedVehicleData = vehicleData.map(d => ({
-      year: new Date(d.year, 0, 1), // 代表当年1月1日
+      year: new Date(d.year, 0, 1),
       category: d.category,
       type: d.type,
       number: d.number
     }));
 
-    // 初始化筛选器（COE Category, Vehicle Category, Vehicle Type, Year）
+    // 初始化筛选器
     initFilters(processedCoeData, processedVehicleData);
 
     // 初始渲染
@@ -177,7 +177,7 @@
     console.error("Error loading CSV data:", error);
   });
 
-  // 初始化筛选器：提取 COE 和车辆数据中的独特值
+  // 初始化筛选器：提取 COE 与车辆数据中的独特值
   function initFilters(coeData, vehicleData) {
     const coeCategories = [...new Set(coeData.map(d => d.vehicle_class))];
     const coeSelect = d3.select("#coeCategorySelect");
@@ -200,7 +200,6 @@
       .join("option")
       .text(d => d);
 
-    // 提取年份（从车辆数据中）
     const years = [...new Set(vehicleData.map(d => d.year.getFullYear()))].sort((a, b) => a - b);
     const yearSelect = d3.select("#yearSelect");
     yearSelect.selectAll("option")
@@ -238,7 +237,7 @@
       filteredVehicleData = filteredVehicleData.filter(d => d.year.getFullYear() == selectedYear);
     }
 
-    // 按年份聚合车辆数据（不区分 category 和 type）
+    // 按年份聚合车辆数据（忽略 category 和 type）
     const vehicleAggregation = d3.rollup(
       filteredVehicleData,
       v => d3.sum(v, d => d.number),
@@ -249,7 +248,7 @@
       total
     })).sort((a, b) => a.year - b.year);
 
-    // 定义 x 轴比例尺：基于 COE 数据和车辆聚合数据的时间范围
+    // 定义 x 轴比例尺（基于 COE 与车辆数据的时间范围）
     const xExtent = d3.extent([...filteredCoeData.map(d => d.date), ...vehicleSeries.map(d => d.year)]);
     const xScale = d3.scaleTime().domain(xExtent).range([0, innerWidth]);
 
@@ -268,17 +267,14 @@
     const yAxisLeft = d3.axisLeft(y1Scale).ticks(6).tickFormat(d => `$${d3.format(".2s")(d)}`);
     const yAxisRight = d3.axisRight(y2Scale).ticks(6).tickFormat(d3.format(".2s"));
 
-    // 清空之前的坐标轴
-    chart.selectAll(".x-axis").remove();
-    chart.selectAll(".y-axis.left").remove();
-    chart.selectAll(".y-axis.right").remove();
-
     // 更新坐标轴
+    chart.selectAll(".x-axis").remove();
     chart.append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0, ${innerHeight})`)
       .call(xAxis);
 
+    chart.selectAll(".y-axis.left").remove();
     chart.append("g")
       .attr("class", "y-axis left")
       .call(yAxisLeft)
@@ -290,6 +286,7 @@
       .attr("fill", "steelblue")
       .text("COE Premium ($)");
 
+    chart.selectAll(".y-axis.right").remove();
     chart.append("g")
       .attr("class", "y-axis right")
       .attr("transform", `translate(${innerWidth}, 0)`)
@@ -320,7 +317,7 @@
       .x(d => xScale(d.year))
       .y(d => y2Scale(d.total));
 
-    // 清除旧折线并绘制新的折线
+    // 更新 COE 折线
     chart.selectAll(".coe-line").remove();
     chart.append("path")
       .datum(filteredCoeData)
@@ -328,6 +325,7 @@
       .attr("stroke", "#e63946")
       .attr("d", coeLine);
 
+    // 更新车辆折线
     chart.selectAll(".vehicle-line").remove();
     chart.append("path")
       .datum(vehicleSeries)
@@ -336,7 +334,8 @@
       .attr("d", vehicleLine);
 
     // 添加垂直注释线，标注 COE 定义变化（2022年5月）
-    const changeDate = parseCoeDate("May-22");
+    // 注意，注释日期字符串必须符合 "%y-%b" 格式，此处使用 "22-May"
+    const changeDate = parseCoeDate("22-May");
     chart.selectAll(".change-line").remove();
     chart.append("line")
       .attr("class", "change-line")
@@ -361,7 +360,7 @@
       .attr("class", "tooltip")
       .style("opacity", 0);
 
-    // COE 数据 tooltip 圆点
+    // 添加 COE 数据点 tooltip
     chart.selectAll(".dot-coe").remove();
     chart.selectAll(".dot-coe")
       .data(filteredCoeData)
@@ -379,7 +378,7 @@
       })
       .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-    // 车辆数据 tooltip 圆点
+    // 添加车辆数据点 tooltip
     chart.selectAll(".dot-vehicle").remove();
     chart.selectAll(".dot-vehicle")
       .data(vehicleSeries)
