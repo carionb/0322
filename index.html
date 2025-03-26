@@ -17,11 +17,22 @@
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       margin-bottom: 30px;
     }
-    .explanation {
+    .controls {
+      display: flex;
+      gap: 20px;
       margin-bottom: 30px;
-      padding: 20px;
-      border-left: 4px solid #2a9d8f;
-      background: #e9f5f0;
+      flex-wrap: wrap;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #ced4da;
+      background: white;
     }
     .axis-label {
       font-size: 14px;
@@ -45,26 +56,51 @@
       stroke-width: 2;
       transition: opacity 0.3s;
     }
+    .explanation {
+      margin-bottom: 30px;
+      padding: 20px;
+      border-left: 4px solid #2a9d8f;
+      background: #e9f5f0;
+    }
   </style>
 </head>
 <body>
-  <!-- 说明区域：阐明假设与可视化思路 -->
+  <!-- 说明区域 -->
   <div class="dashboard explanation">
     <h2>Hypothesis and Visualization Approach</h2>
     <p>
       I hypothesize that there is a positive correlation between the overall vehicle population in Singapore and COE premiums.
-      As the vehicle population increases, the demand for vehicles intensifies, which may drive up the COE bidding prices.
+      As the vehicle population increases, the demand for vehicles intensifies, driving up COE bidding prices.
       In addition, the regulatory changes implemented in May 2022—which altered the eligibility criteria for certain COE categories—
-      might have introduced a notable shift in the premium trends.
+      might have introduced a noticeable shift in the premium trends.
     </p>
     <p>
-      For this visualization, I use two datasets:
+      The visualization uses two datasets:
       <strong>COE Bidding Results / Prices</strong> (with monthly data in the format "10-Jan" representing 2010-01)
       and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (with yearly data from 2005 to 2025).
-      The chart features a dual-axis time series:
-      the left y-axis shows COE premiums (red line), and the right y-axis shows the aggregated vehicle population (green line).
-      A vertical annotation at May 2022 highlights the regulatory change.
+      The chart features a dual-axis time series: the left y-axis shows COE premiums and the right y-axis displays the aggregated vehicle population.
+      Interactive filters allow you to select COE Category, Vehicle Category, Vehicle Type, and Year.
     </p>
+  </div>
+
+  <!-- 控制面板 -->
+  <div class="dashboard controls">
+    <div class="control-group">
+      <label>COE Category:</label>
+      <select id="coeCategorySelect"></select>
+    </div>
+    <div class="control-group">
+      <label>Vehicle Category:</label>
+      <select id="vehicleCategorySelect"></select>
+    </div>
+    <div class="control-group">
+      <label>Vehicle Type:</label>
+      <select id="vehicleTypeSelect"></select>
+    </div>
+    <div class="control-group">
+      <label>Year:</label>
+      <select id="yearSelect"></select>
+    </div>
   </div>
 
   <!-- 图表区域 -->
@@ -95,12 +131,12 @@
     .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
 
   // 定义日期解析函数
-  // COE 数据中 Month 字段格式为 "10-Jan" 表示 2010年1月
+  // COE 数据中 Month 字段格式为 "10-Jan" (两位年份-月份缩写)
   const parseCoeDate = d3.timeParse("%y-%b");
   // 车辆数据中 year 字段格式为 "2005"
   const parseVehicleYear = d3.timeParse("%Y");
 
-  // CSV 文件的 URL —— 请根据实际情况检查
+  // CSV 文件 URL —— 请确保路径正确（GitHub raw 链接）
   const coeURL = "https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv";
   const vehicleURL = "https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv";
 
@@ -112,50 +148,132 @@
     console.log("First row of COE data:", coeData[0]);
     console.log("First row of Vehicle data:", vehicleData[0]);
 
-    // 处理 COE 数据：字段名称基于 CSV 原始标题（区分大小写）
-    // 使用 "Month"、"Vehicle Class"、"Premium"
+    // 处理 COE 数据：字段 "Month", "Vehicle Class", "Premium"
     const processedCoeData = coeData.map(d => ({
       date: parseCoeDate(d.Month),
       vehicle_class: d["Vehicle Class"],
       premium: d.Premium
     })).filter(d => d.date);
 
-    // 处理车辆数据：使用 "year", "category", "type", "number"
+    // 处理车辆数据：字段 "year", "category", "type", "number"
     const processedVehicleData = vehicleData.map(d => ({
-      year: new Date(d.year, 0, 1),
+      year: new Date(d.year, 0, 1), // 代表当年1月1日
       category: d.category,
       type: d.type,
       number: d.number
     }));
 
-    // 按年份聚合车辆数据（忽略 category 和 type）
-    const aggregatedVehicleData = Array.from(
-      d3.rollup(processedVehicleData, v => d3.sum(v, d => d.number), d => d.year.getFullYear()),
-      ([year, total]) => ({ year: new Date(year, 0, 1), total })
-    ).sort((a, b) => a.year - b.year);
+    // 初始化筛选器（COE Category, Vehicle Category, Vehicle Type, Year）
+    initFilters(processedCoeData, processedVehicleData);
 
-    console.log("Aggregated Vehicle Data:", aggregatedVehicleData);
+    // 初始渲染
+    updateVisualization(processedCoeData, processedVehicleData);
 
-    // 定义 x 轴比例尺（取 COE 数据和车辆数据的最小与最大日期）
-    const xExtent = d3.extent([...processedCoeData.map(d => d.date), ...aggregatedVehicleData.map(d => d.year)]);
+    // 监听筛选器变化
+    d3.selectAll("select").on("change", () => {
+      updateVisualization(processedCoeData, processedVehicleData);
+    });
+  }).catch(error => {
+    console.error("Error loading CSV data:", error);
+  });
+
+  // 初始化筛选器：提取 COE 和车辆数据中的独特值
+  function initFilters(coeData, vehicleData) {
+    const coeCategories = [...new Set(coeData.map(d => d.vehicle_class))];
+    const coeSelect = d3.select("#coeCategorySelect");
+    coeSelect.selectAll("option")
+      .data(["All", ...coeCategories])
+      .join("option")
+      .text(d => d);
+
+    const vehicleCategories = [...new Set(vehicleData.map(d => d.category))];
+    const vehicleCatSelect = d3.select("#vehicleCategorySelect");
+    vehicleCatSelect.selectAll("option")
+      .data(["All", ...vehicleCategories])
+      .join("option")
+      .text(d => d);
+
+    const vehicleTypes = [...new Set(vehicleData.map(d => d.type))];
+    const vehicleTypeSelect = d3.select("#vehicleTypeSelect");
+    vehicleTypeSelect.selectAll("option")
+      .data(["All", ...vehicleTypes])
+      .join("option")
+      .text(d => d);
+
+    // 提取年份（从车辆数据中）
+    const years = [...new Set(vehicleData.map(d => d.year.getFullYear()))].sort((a, b) => a - b);
+    const yearSelect = d3.select("#yearSelect");
+    yearSelect.selectAll("option")
+      .data(["All", ...years])
+      .join("option")
+      .text(d => d === "All" ? "All Years" : d);
+  }
+
+  // 更新可视化
+  function updateVisualization(coeData, vehicleData) {
+    // 获取当前筛选条件
+    const selectedCoeCat = d3.select("#coeCategorySelect").property("value");
+    const selectedVehicleCat = d3.select("#vehicleCategorySelect").property("value");
+    const selectedVehicleType = d3.select("#vehicleTypeSelect").property("value");
+    const selectedYear = d3.select("#yearSelect").property("value");
+
+    // 筛选 COE 数据：根据 COE Category 和年份
+    let filteredCoeData = coeData;
+    if (selectedCoeCat !== "All") {
+      filteredCoeData = filteredCoeData.filter(d => d.vehicle_class === selectedCoeCat);
+    }
+    if (selectedYear !== "All") {
+      filteredCoeData = filteredCoeData.filter(d => d.date.getFullYear() == selectedYear);
+    }
+
+    // 筛选车辆数据：根据 Vehicle Category, Vehicle Type 和年份
+    let filteredVehicleData = vehicleData;
+    if (selectedVehicleCat !== "All") {
+      filteredVehicleData = filteredVehicleData.filter(d => d.category === selectedVehicleCat);
+    }
+    if (selectedVehicleType !== "All") {
+      filteredVehicleData = filteredVehicleData.filter(d => d.type === selectedVehicleType);
+    }
+    if (selectedYear !== "All") {
+      filteredVehicleData = filteredVehicleData.filter(d => d.year.getFullYear() == selectedYear);
+    }
+
+    // 按年份聚合车辆数据（不区分 category 和 type）
+    const vehicleAggregation = d3.rollup(
+      filteredVehicleData,
+      v => d3.sum(v, d => d.number),
+      d => d.year.getFullYear()
+    );
+    const vehicleSeries = Array.from(vehicleAggregation, ([year, total]) => ({
+      year: new Date(year, 0, 1),
+      total
+    })).sort((a, b) => a.year - b.year);
+
+    // 定义 x 轴比例尺：基于 COE 数据和车辆聚合数据的时间范围
+    const xExtent = d3.extent([...filteredCoeData.map(d => d.date), ...vehicleSeries.map(d => d.year)]);
     const xScale = d3.scaleTime().domain(xExtent).range([0, innerWidth]);
 
-    // 定义左侧 y 轴比例尺：COE Premium
-    const yLeft = d3.scaleLinear()
-      .domain([0, d3.max(processedCoeData, d => d.premium)]).nice()
+    // 定义 y 轴比例尺
+    const y1Scale = d3.scaleLinear()
+      .domain([0, d3.max(filteredCoeData, d => d.premium)])
+      .nice()
       .range([innerHeight, 0]);
-
-    // 定义右侧 y 轴比例尺：车辆总数
-    const yRight = d3.scaleLinear()
-      .domain([0, d3.max(aggregatedVehicleData, d => d.total)]).nice()
+    const y2Scale = d3.scaleLinear()
+      .domain([0, d3.max(vehicleSeries, d => d.total)])
+      .nice()
       .range([innerHeight, 0]);
 
     // 定义坐标轴
     const xAxis = d3.axisBottom(xScale).ticks(8);
-    const yAxisLeft = d3.axisLeft(yLeft).ticks(6).tickFormat(d => `$${d3.format(".2s")(d)}`);
-    const yAxisRight = d3.axisRight(yRight).ticks(6).tickFormat(d3.format(".2s"));
+    const yAxisLeft = d3.axisLeft(y1Scale).ticks(6).tickFormat(d => `$${d3.format(".2s")(d)}`);
+    const yAxisRight = d3.axisRight(y2Scale).ticks(6).tickFormat(d3.format(".2s"));
 
-    // 绘制坐标轴
+    // 清空之前的坐标轴
+    chart.selectAll(".x-axis").remove();
+    chart.selectAll(".y-axis.left").remove();
+    chart.selectAll(".y-axis.right").remove();
+
+    // 更新坐标轴
     chart.append("g")
       .attr("class", "x-axis")
       .attr("transform", `translate(0, ${innerHeight})`)
@@ -185,9 +303,10 @@
       .text("Total Vehicles");
 
     // 添加网格线
+    chart.selectAll(".grid").remove();
     chart.append("g")
       .attr("class", "grid")
-      .call(d3.axisLeft(yLeft)
+      .call(d3.axisLeft(y1Scale)
         .ticks(6)
         .tickSize(-innerWidth)
         .tickFormat(""));
@@ -195,28 +314,30 @@
     // 定义折线生成器
     const coeLine = d3.line()
       .x(d => xScale(d.date))
-      .y(d => yLeft(d.premium));
+      .y(d => y1Scale(d.premium));
 
     const vehicleLine = d3.line()
       .x(d => xScale(d.year))
-      .y(d => yRight(d.total));
+      .y(d => y2Scale(d.total));
 
-    // 绘制 COE 折线（所有类别一起显示，可根据需要进一步分组）
+    // 清除旧折线并绘制新的折线
+    chart.selectAll(".coe-line").remove();
     chart.append("path")
-      .datum(processedCoeData)
+      .datum(filteredCoeData)
       .attr("class", "line coe-line")
       .attr("stroke", "#e63946")
       .attr("d", coeLine);
 
-    // 绘制车辆聚合折线
+    chart.selectAll(".vehicle-line").remove();
     chart.append("path")
-      .datum(aggregatedVehicleData)
+      .datum(vehicleSeries)
       .attr("class", "line vehicle-line")
       .attr("stroke", "#2a9d8f")
       .attr("d", vehicleLine);
 
     // 添加垂直注释线，标注 COE 定义变化（2022年5月）
     const changeDate = parseCoeDate("May-22");
+    chart.selectAll(".change-line").remove();
     chart.append("line")
       .attr("class", "change-line")
       .attr("x1", xScale(changeDate))
@@ -226,6 +347,7 @@
       .attr("stroke", "red")
       .attr("stroke-dasharray", "4,4");
 
+    chart.selectAll(".change-text").remove();
     chart.append("text")
       .attr("class", "change-text")
       .attr("x", xScale(changeDate) + 5)
@@ -239,32 +361,32 @@
       .attr("class", "tooltip")
       .style("opacity", 0);
 
-    // 添加 COE 数据点 tooltip
+    // COE 数据 tooltip 圆点
     chart.selectAll(".dot-coe").remove();
     chart.selectAll(".dot-coe")
-      .data(processedCoeData)
+      .data(filteredCoeData)
       .enter().append("circle")
       .attr("class", "dot-coe")
       .attr("cx", d => xScale(d.date))
-      .attr("cy", d => yLeft(d.premium))
+      .attr("cy", d => y1Scale(d.premium))
       .attr("r", 4)
       .attr("fill", "#e63946")
       .on("mouseover", (event, d) => {
         tooltip.transition().duration(200).style("opacity", 0.9);
-        tooltip.html(`Month: ${d3.timeFormat("%b %Y")(d.date)}<br>Category: ${d.vehicle_class}<br>Premium: $${d.premium}`)
+        tooltip.html(`Month: ${d3.timeFormat("%b %Y")(d.date)}<br>COE Category: ${d.vehicle_class}<br>Premium: $${d.premium}`)
           .style("left", `${event.pageX + 15}px`)
           .style("top", `${event.pageY - 28}px`);
       })
       .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
 
-    // 添加车辆数据点 tooltip
+    // 车辆数据 tooltip 圆点
     chart.selectAll(".dot-vehicle").remove();
     chart.selectAll(".dot-vehicle")
-      .data(aggregatedVehicleData)
+      .data(vehicleSeries)
       .enter().append("circle")
       .attr("class", "dot-vehicle")
       .attr("cx", d => xScale(d.year))
-      .attr("cy", d => yRight(d.total))
+      .attr("cy", d => y2Scale(d.total))
       .attr("r", 4)
       .attr("fill", "#2a9d8f")
       .on("mouseover", (event, d) => {
@@ -274,9 +396,7 @@
           .style("top", `${event.pageY - 28}px`);
       })
       .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
-  }).catch(error => {
-    console.error("Error loading CSV data:", error);
-  });
+  }
 </script>
 </body>
 </html>
