@@ -2,11 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title></title>Interactive Visualization: COE Prices & Vehicle Population</title>
+  <title>Optimized Interactive Visualization: COE Prices & Vehicle Population</title>
   <script src="https://d3js.org/d3.v6.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    #description { margin-bottom: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f4;
+    }
+    .container {
+      background: #fff;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h2 { margin-top: 0; }
     .axis path, .axis line { fill: none; stroke: #000; }
     .grid line { stroke: #ccc; stroke-dasharray: 3 3; }
     .line { fill: none; stroke-width: 2px; }
@@ -15,31 +26,40 @@
       background: lightsteelblue; padding: 5px;
       border: 1px solid #000; pointer-events: none; opacity: 0;
     }
-    .brush .selection { fill: #777; fill-opacity: 0.3; stroke: #fff; }
+    .brush .selection {
+      fill: #777; fill-opacity: 0.3; stroke: #fff;
+    }
     .checkbox-container { margin-bottom: 10px; }
+    /* 部分容器外边框 */
+    #description, .checkbox-container, #chart-container {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <!-- Hypothesis Description -->
-  <div id="description">
+  <!-- Description Section -->
+  <div id="description" class="container">
     <h2>Hypothesis and Data Description</h2>
     <p>
       I hypothesize that there is a positive correlation between COE bidding prices and the overall vehicle population in Singapore. As the vehicle population increases, the demand for vehicle ownership intensifies, which may drive up COE bidding prices. Conversely, periods with a declining vehicle population might correspond with lower COE prices.
     </p>
     <p>
-      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). The main chart (focus) displays COE prices (left y-axis) and total vehicle count (right y-axis), while the context chart below shows an overview of COE prices for brushing and zooming. Interactive filtering via checkboxes lets users toggle the series.
+      The analysis uses two datasets: <strong>COE Bidding Results / Prices</strong> (from January 2010 to March 2025) and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (from January 2005 to December 2020). The main chart displays COE prices (left y-axis) and total vehicle count (right y-axis). Interactive filtering via checkboxes lets users toggle the series.
     </p>
   </div>
   
-  <!-- Filtering Checkboxes -->
-  <div class="checkbox-container">
+  <!-- Filtering Section -->
+  <div class="container checkbox-container">
     <label><input type="checkbox" id="toggleCoe" checked> Show COE Bidding Prices</label>
-    <label><input type="checkbox" id="toggleVehicle" checked> Show Total Vehicle Count</label>
+    <label style="margin-left: 20px;"><input type="checkbox" id="toggleVehicle" checked> Show Total Vehicle Count</label>
   </div>
   
-  <!-- Chart Container -->
-  <svg id="chart" width="900" height="500"></svg>
-  <div class="tooltip" id="tooltip"></div>
+  <!-- Chart Section -->
+  <div id="chart-container" class="container">
+    <svg id="chart" width="900" height="500"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
   
   <script>
     // Overall SVG dimensions
@@ -72,20 +92,28 @@
     const parseDate = d3.timeParse("%Y-%m-%d");
     const parseYear = d3.timeParse("%Y");
     
-    // Load CSV files from GitHub (adjust URLs if necessary)
+    // 加入一个函数用于清理每一行数据（trim所有键和值）
+    function cleanRow(row) {
+      const newRow = {};
+      Object.keys(row).forEach(key => {
+        const trimmedKey = key.trim();
+        newRow[trimmedKey] = typeof row[key] === "string" ? row[key].trim() : row[key];
+      });
+      return newRow;
+    }
+    
+    // Load CSV files from GitHub
     Promise.all([
-      // For COE data, try using "Bidding_Date" first, fallback to "Date" if needed
-      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv"),
-      // For vehicle data, assume the CSV has fields "Year", "Car", "LGV", "HGV", "VHGV"
-      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv")
+      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv", cleanRow),
+      d3.csv("https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv", cleanRow)
     ]).then(([coeData, vehicleData]) => {
-      // Debug: log first row of each CSV to inspect field names
+      // 输出第一行数据查看实际字段
       console.log("First row of COE data:", coeData[0]);
       console.log("First row of vehicle data:", vehicleData[0]);
       
       // Process COE data
       coeData.forEach(d => {
-        // Try to use "Bidding_Date"; if not available, try "Date"
+        // 使用 "Bidding_Date" 或 "Date"
         const dateStr = d.Bidding_Date || d.Date;
         if(dateStr) {
           d.date = parseDate(dateStr);
@@ -95,7 +123,6 @@
         } else {
           console.error("No valid date field found in row:", d);
         }
-        // Use "Price" or fallback to "price"
         d.price = +(d.Price || d.price);
       });
       
@@ -106,7 +133,6 @@
         } else {
           console.error("No Year field in row:", d);
         }
-        // Sum the values for vehicle types; adjust if headers differ.
         d.total = +(d.Car) + +(d.LGV) + +(d.HGV) + +(d.VHGV);
       });
       
@@ -181,7 +207,7 @@
                             .x(d => x(d.Year))
                             .y(d => y1(d.total));
       
-      // Draw lines in focus chart with transitions
+      // Draw lines in focus chart
       const coePath = focus.append("path")
                            .datum(coeData)
                            .attr("class", "line coe-line")
