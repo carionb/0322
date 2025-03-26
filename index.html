@@ -17,6 +17,12 @@
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       margin-bottom: 30px;
     }
+    .explanation {
+      margin-bottom: 30px;
+      padding: 20px;
+      border-left: 4px solid #2a9d8f;
+      background: #e9f5f0;
+    }
     .controls {
       display: flex;
       gap: 20px;
@@ -56,12 +62,6 @@
       stroke-width: 2;
       transition: opacity 0.3s;
     }
-    .explanation {
-      margin-bottom: 30px;
-      padding: 20px;
-      border-left: 4px solid #2a9d8f;
-      background: #e9f5f0;
-    }
   </style>
 </head>
 <body>
@@ -70,15 +70,15 @@
     <h2>Hypothesis and Visualization Approach</h2>
     <p>
       I hypothesize that there is a positive correlation between the overall vehicle population in Singapore and COE premiums.
-      As the vehicle population increases, the demand for vehicles intensifies, driving up COE bidding prices.
-      Additionally, the regulatory changes implemented in May 2022—which altered the eligibility criteria for certain COE categories—
+      As vehicle ownership increases, the demand intensifies, driving up COE bidding prices.
+      Furthermore, regulatory changes implemented in May 2022, which altered the eligibility criteria for certain COE categories,
       might have introduced a noticeable shift in the premium trends.
     </p>
     <p>
-      The visualization uses two datasets:
-      <strong>COE Bidding Results / Prices</strong> (with monthly data in the format "10-Jan" representing 2010-01)
+      This visualization uses two datasets:
+      <strong>COE Bidding Results / Prices</strong> (with monthly data in the format "10-Jan" representing January 2010)
       and <strong>Annual Motor Vehicle Population by Vehicle Type</strong> (with yearly data from 2005 to 2025).
-      The chart features a dual-axis time series: the left y-axis shows COE premiums and the right y-axis displays the aggregated vehicle population.
+      A dual-axis time series is used where the left y-axis shows COE Premiums (red line) and the right y-axis displays the aggregated vehicle population (green line).
       Interactive filters allow you to select COE Category, Vehicle Category, Vehicle Type, and Year.
     </p>
   </div>
@@ -136,7 +136,7 @@
   // 车辆数据中 year 字段格式为 "2005"
   const parseVehicleYear = d3.timeParse("%Y");
 
-  // CSV 文件的 URL —— 请确保路径正确（GitHub raw 链接）
+  // CSV 文件 URL —— 请确保路径正确（GitHub raw 链接）
   const coeURL = "https://raw.githubusercontent.com/carionb/0322/main/COEBiddingResultsPrices.csv";
   const vehicleURL = "https://raw.githubusercontent.com/carionb/0322/main/AnnualMotorVehiclePopulationbyVehicleType.csv";
 
@@ -148,14 +148,17 @@
     console.log("First row of COE data:", coeData[0]);
     console.log("First row of Vehicle data:", vehicleData[0]);
 
-    // 处理 COE 数据：如果 d.Month 已经是 Date 对象，则直接使用；否则解析
-    const processedCoeData = coeData.map(d => ({
-      date: (d.Month instanceof Date) ? d.Month : parseCoeDate(d.Month),
-      vehicle_class: d["Vehicle Class"],
-      premium: d.Premium
-    })).filter(d => d.date);
+    // 处理 COE 数据：检测 Month 是否已经为 Date 对象
+    const processedCoeData = coeData.map(d => {
+      const date = (d.Month instanceof Date) ? d.Month : parseCoeDate(d.Month);
+      return {
+        date: date,
+        vehicle_class: d["Vehicle Class"],
+        premium: d.Premium
+      };
+    }).filter(d => d.date instanceof Date);
 
-    // 处理车辆数据：将 "year" 转为日期对象（代表当年1月1日）
+    // 处理车辆数据：将 year 转换为日期对象（代表当年1月1日）
     const processedVehicleData = vehicleData.map(d => ({
       year: new Date(d.year, 0, 1),
       category: d.category,
@@ -248,7 +251,7 @@
       total
     })).sort((a, b) => a.year - b.year);
 
-    // 定义 x 轴比例尺：基于筛选后的 COE 数据与车辆数据的时间范围
+    // 定义 x 轴比例尺（基于筛选后的 COE 数据与车辆数据的时间范围）
     const xExtent = d3.extent([...filteredCoeData.map(d => d.date), ...vehicleSeries.map(d => d.year)]);
     const xScale = d3.scaleTime().domain(xExtent).range([0, innerWidth]);
 
@@ -267,7 +270,7 @@
     const yAxisLeft = d3.axisLeft(y1Scale).ticks(6).tickFormat(d => `$${d3.format(".2s")(d)}`);
     const yAxisRight = d3.axisRight(y2Scale).ticks(6).tickFormat(d3.format(".2s"));
 
-    // 更新坐标轴
+    // 清空并更新坐标轴
     chart.selectAll(".x-axis").remove();
     chart.append("g")
       .attr("class", "x-axis")
@@ -312,7 +315,6 @@
     const coeLine = d3.line()
       .x(d => xScale(d.date))
       .y(d => y1Scale(d.premium));
-
     const vehicleLine = d3.line()
       .x(d => xScale(d.year))
       .y(d => y2Scale(d.total));
@@ -334,8 +336,8 @@
       .attr("d", vehicleLine);
 
     // 添加垂直注释线，标注 COE 定义变化（2022年5月）
-    // 注意：直接构造日期对象，避免使用解析字符串，防止转换错误
-    const changeDate = new Date(2022, 4, 1); // 2022年5月1日（JS月份从0开始）
+    // 直接构造日期对象，避免解析错误
+    const changeDate = new Date(2022, 4, 1); // 2022年5月1日（JS中月份从0开始）
     chart.selectAll(".change-line").remove();
     chart.append("line")
       .attr("class", "change-line")
